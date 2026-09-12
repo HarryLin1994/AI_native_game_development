@@ -41,9 +41,16 @@ Build a consent-based local MVP that can:
 - Age Impression: fictional age direction.
 - Real-World Role: declared job, hobby, or identity motif.
 - Visible Traits: short tags like glasses, short hair, calm, sporty, black jacket.
+- User-Supplied Context: optional background, preferences, values, or identity details supplied with consent.
 - Combat Style: player-chosen battle preference.
 - Card Mood: art direction.
 - Image Mode: local preview or AI retouch.
+
+**Capture Context**
+
+- Optional time, approximate location, weather, and place type.
+- Should use coarse creative labels by default, not exact tracking data.
+- If missing, the generator uses Default Generation Template values.
 
 **Reroll Seed**
 
@@ -262,6 +269,7 @@ Responsibilities:
 - Produce Retouched Portrait.
 - Render Card Cover.
 - Report fallback or model errors.
+- Preserve consenting subject likeness while avoiding identity verification claims.
 
 Adapters:
 
@@ -347,6 +355,8 @@ The first extraction should be `character-generator.js` because it has the highe
 - Saved Battle Cards are schema-versioned.
 - Prompts must preserve creative intent but avoid identity-recognition claims.
 - Visible Traits can affect stats and skills, but should not infer sensitive attributes.
+- Sensitive creative context can affect fiction and mechanics only when explicitly supplied with consent.
+- Capture Context can affect origin, visuals, element bias, skill flavor, and encounter modifiers, but must have a default fallback.
 - Rarity should feel exciting but should not be presented as judging the real person.
 
 ## Test Targets
@@ -368,3 +378,4 @@ The first extraction should be `character-generator.js` because it has the highe
 - Whether future battles are client-only, server-verified, or fully server-authoritative.
 - Whether progression belongs on the Battle Card itself or in a separate player-owned progression record.
 - How much the AI-generated Retouched Portrait should influence stats, if at all.
+- Whether location/time should be collected from device APIs, entered manually, or disabled by default.

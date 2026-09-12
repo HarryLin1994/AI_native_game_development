@@ -20,6 +20,22 @@ _Avoid_: OCR truth, legal name
 The player's answers that steer character creation, including age impression, real-world role, visible traits, combat style, and card mood.
 _Avoid_: User profile, personal profile
 
+**User-Supplied Context**:
+Optional context intentionally provided by the player or photo subject to shape a fictional character, such as backstory, preferences, values, identity, or roleplay direction.
+_Avoid_: Detected identity, inferred profile
+
+**Sensitive Creative Context**:
+Sensitive User-Supplied Context, such as sexual orientation, political views, religion, health, or similar personal information. It may only be used when explicitly provided by the subject or with clear consent, and must never be inferred from a Source Photo.
+_Avoid_: Inferred sexuality, inferred politics, biometric profile
+
+**Capture Context**:
+Optional time, location, weather, or place-type information attached to a capture. It is a creative seed for the character's origin, visuals, or mechanics, not required identity data.
+_Avoid_: Tracking data, exact location requirement
+
+**Default Generation Template**:
+A fallback creative context used when optional User-Supplied Context or Capture Context is missing.
+_Avoid_: Missing data error
+
 **Age Impression**:
 A fictional age band selected as creative direction for the character. It is not a verified age estimate.
 _Avoid_: Detected age, real age
@@ -75,6 +91,10 @@ _Avoid_: Real-world role
 **Retouched Portrait**:
 An identity-preserving fantasy portrait derived from the Source Photo for creative use in the card.
 _Avoid_: Verified likeness, face match
+
+**Identity Preservation**:
+The visual goal of keeping broad likeness and recognizable cues of the consenting photo subject while transforming them into a fictional character.
+_Avoid_: Face recognition, identity verification
 
 **Card Cover**:
 The final visual presentation image for a Battle Card.
