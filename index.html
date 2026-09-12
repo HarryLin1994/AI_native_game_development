@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Photo Character Lab MVP</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Local MVP</p>
+          <h1>Photo Character Lab</h1>
+        </div>
+        <div class="topbar-status" id="privacyStatus">本機分析中，照片不會上傳</div>
+      </header>
+
+      <main class="workspace">
+        <section class="tool-panel capture-panel" aria-labelledby="captureTitle">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">Photo Input</p>
+              <h2 id="captureTitle">人物生成素材</h2>
+            </div>
+            <span class="pill" id="analysisState">等待素材</span>
+          </div>
+
+          <div class="capture-frame">
+            <img id="imagePreview" alt="角色來源照片預覽" />
+            <video id="cameraFeed" playsinline muted></video>
+            <div class="empty-state" id="emptyState">
+              <strong>上傳照片或啟動相機</strong>
+              <span>影像會留在這台裝置</span>
+            </div>
+          </div>
+
+          <div class="control-grid">
+            <label class="file-button">
+              <input id="imageInput" type="file" accept="image/*" />
+              上傳照片
+            </label>
+            <button id="cameraButton" type="button">開啟相機</button>
+            <button id="captureButton" type="button" disabled>拍攝</button>
+            <button id="summonButton" type="button" disabled>生成人物</button>
+          </div>
+
+          <label class="field">
+            <span>OCR 文字種子</span>
+            <input id="sigilInput" type="text" maxlength="42" placeholder="衣服、名牌、招牌上的字" />
+          </label>
+
+          <div class="question-panel">
+            <label class="field">
+              <span>年齡印象</span>
+              <select id="ageInput">
+                <option value="young_adult">青年</option>
+                <option value="teen">少年</option>
+                <option value="adult">成年</option>
+                <option value="veteran">資深</option>
+                <option value="legend">傳奇</option>
+              </select>
+            </label>
+
+            <label class="field">
+              <span>現實職業 / 身份</span>
+              <input id="occupationInput" type="text" maxlength="36" placeholder="工程師、學生、設計師、醫師" />
+            </label>
+
+            <label class="field wide-field">
+              <span>人物特徵</span>
+              <textarea id="featureInput" maxlength="96" rows="3" placeholder="眼鏡、短髮、冷靜、運動感、黑色外套"></textarea>
+            </label>
+
+            <label class="field">
+              <span>戰鬥風格</span>
+              <select id="combatStyleInput">
+                <option value="auto">自動判定</option>
+                <option value="striker">攻擊壓制</option>
+                <option value="duelist">速度連擊</option>
+                <option value="guardian">防禦守護</option>
+                <option value="controller">控制干擾</option>
+                <option value="trickster">幸運奇襲</option>
+              </select>
+            </label>
+
+            <label class="field">
+              <span>卡面氣質</span>
+              <select id="cardMoodInput">
+                <option value="cinematic">電影感</option>
+                <option value="neon">霓虹科技</option>
+                <option value="arcane">祕法幻想</option>
+                <option value="street">街頭英雄</option>
+                <option value="royal">史詩王者</option>
+              </select>
+            </label>
+
+            <label class="field wide-field">
+              <span>圖像生成模式</span>
+              <select id="imageModeInput">
+                <option value="ai">真正 AI 修飾，需要 OPENAI_API_KEY</option>
+                <option value="local">本機預覽，不呼叫 AI</option>
+              </select>
+            </label>
+          </div>
+
+          <div class="analysis-grid" id="analysisGrid"></div>
+        </section>
+
+        <section class="card-stage" aria-label="生成角色">
+          <article class="game-card empty-card" id="cardPreview">
+            <div class="card-art placeholder-art"></div>
+            <div class="card-body">
+              <div class="card-title-row">
+                <div>
+                  <p class="card-kicker">Character Spec</p>
+                  <h2>尚未生成</h2>
+                </div>
+                <span class="rarity-badge">N</span>
+              </div>
+              <p class="card-lore">選擇真實照片後，角色設定與視覺稿會在這裡成形。</p>
+            </div>
+          </article>
+
+          <div class="card-actions">
+            <button id="saveCardButton" type="button" disabled>保存角色</button>
+            <button id="rerollButton" type="button" disabled>重鑄角色</button>
+          </div>
+        </section>
+
+        <section class="tool-panel battle-panel" aria-labelledby="battleTitle">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">Battle Test</p>
+              <h2 id="battleTitle">角色戰鬥測試</h2>
+            </div>
+            <span class="pill" id="battleState">未開戰</span>
+          </div>
+
+          <div class="fighters">
+            <div class="fighter" id="playerFighter">
+              <span class="fighter-label">Player</span>
+              <strong>未選擇</strong>
+              <div class="hp-track"><span></span></div>
+              <small>HP 0 / 0</small>
+            </div>
+            <div class="versus">VS</div>
+            <div class="fighter enemy" id="enemyFighter">
+              <span class="fighter-label">CPU</span>
+              <strong>等待中</strong>
+              <div class="hp-track"><span></span></div>
+              <small>HP 0 / 0</small>
+            </div>
+          </div>
+
+          <div class="battle-controls">
+            <button id="startBattleButton" type="button" disabled>開始對戰</button>
+            <button id="attackButton" type="button" disabled>普攻</button>
+            <button id="skillOneButton" type="button" disabled>技能一</button>
+            <button id="skillTwoButton" type="button" disabled>技能二</button>
+            <button id="guardButton" type="button" disabled>防禦</button>
+          </div>
+
+          <ol class="battle-log" id="battleLog" aria-live="polite"></ol>
+        </section>
+
+        <section class="tool-panel deck-panel" aria-labelledby="deckTitle">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">Characters</p>
+              <h2 id="deckTitle">本機角色庫</h2>
+            </div>
+            <span class="pill" id="deckCount">0 張</span>
+          </div>
+          <div class="deck-list" id="deckList"></div>
+        </section>
+      </main>
+    </div>
+
+    <canvas id="analysisCanvas" width="128" height="128" hidden></canvas>
+    <script src="app.js" type="module"></script>
+  </body>
+</html>
