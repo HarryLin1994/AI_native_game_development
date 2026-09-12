@@ -14,6 +14,155 @@ The form should feel like creating a game character, not filling out a personal-
 - Keep sensitive information optional, explicit, and consent-based.
 - Provide defaults when players skip optional questions.
 
+## Generation Control Model
+
+The project should separate four jobs:
+
+- User: declares personal, background, consent, and preference fields.
+- OCR / Vision models: suggest visible, non-sensitive signals from the Source Photo.
+- Rule / Algorithm layer: turns allowed inputs into Character Spec, stats, skills, traits, and mechanics.
+- Picture generation model: renders card art from the Source Photo and Character Spec.
+
+比喻：User 是角色本人或編劇，OCR / Vision 是偵查員，Rule layer 是裁判，Picture generation 是畫師。偵查員不能改比分，畫師不能偷改角色技能。
+
+Core guardrails:
+
+- AI models may suggest, but the Rule / Algorithm layer decides game mechanics.
+- Sensitive facts can only be User-Declared Fields.
+- Model-Suggested Fields must be visible, non-sensitive, and user-editable before they become important.
+- Rule-Derived Fields must be deterministic for the same allowed inputs and generator version.
+- If an optional field is missing, use the Default Generation Template.
+- Do not let free-text answers become arbitrary stat boosts without capped mapping rules.
+- Card Stat Line must come from allowed inputs plus rule tables, not from raw AI guesses.
+
+## Field Source Matrix
+
+| Field | Meaning | Source of truth | Can model suggest it? | Can it affect mechanics? | First rule |
+|---|---|---|---|---|---|
+| Consent | Permission to use the Source Photo and related context | User only | No | Controls whether generation can run | If `no`, stop generation |
+| Age Impression | Fictional age direction for the character | User | No for MVP | Yes | Applies small growth/stat flavor rules |
+| Real-World Role | Declared job, identity, hobby, or role motif | User | No, unless user asks for suggestions | Yes | Maps to role motif, trait, artifact, and skill word |
+| Visible Traits | Appearance or vibe cues such as glasses, short hair, black jacket, calm | User-confirmed | Yes, from visible non-sensitive photo details | Yes | Small capped modifiers and prompt details |
+| Combat Style | Desired battle behavior | User or `auto` | No | Yes | If `auto`, rules derive from Photo Signal |
+| Card Mood | Visual art direction | User or default | No | Mostly visual | Affects prompt and presentation, not raw power |
+| Background Story | One-line fictional origin | User or generated default | Yes, if user asks for a draft | Yes | Adds trait flavor, skill naming, and dialogue hooks |
+| Values | What the character cares about | User or default | No | Yes | Maps to support, attack, defense, control, or growth bias |
+| Weakness / Cost | Character tradeoff | User or generated neutral default | Yes, if user asks for a draft | Yes | Must be a capped tradeoff, not a stereotype or punishment |
+| Signature Item | Iconic item or prop | User-confirmed | Yes, if visible in photo or OCR | Yes | Becomes art prop, trait, passive name, or skill flavor |
+| Place Type | Coarse scene or origin place | User or optional photo scene suggestion | Yes, as non-sensitive scene label | Yes | Adds element bias, origin title, or stage flavor |
+| Time / Mood | Coarse time, lighting, or atmosphere | User or optional photo lighting suggestion | Yes, as mood label only | Yes | Adds visual mood, element bias, or first-turn flavor |
+| Sensitive Creative Context | Sexual orientation, politics, religion, health, or similar personal context | User only with explicit consent | Never | Later, maybe | Not in first MVP UI |
+
+## Anti-Runaway Rules
+
+These rules prevent AI from taking over the design.
+
+1. **Models cannot write final stats directly.**
+   - Bad: AI returns `"power": 999`.
+   - Good: AI suggests `"visibleTraits": ["運動感"]`; rules apply `power +4`, capped at 99.
+
+2. **Models cannot invent sensitive personal facts.**
+   - Bad: AI says the subject has a political view from clothing or location.
+   - Good: User explicitly provides a political background as optional roleplay context.
+
+3. **Free text must map through controlled categories.**
+   - Bad: Any dramatic backstory gives huge attack bonus.
+   - Good: Backstory keywords map to small capped motifs like `guardian`, `researcher`, `wanderer`, `performer`.
+
+4. **Image generation cannot change the Character Spec.**
+   - Bad: Generated image looks fiery, so the card becomes Fire after generation.
+   - Good: Character Spec says `Element = Ember`; image prompt follows it.
+
+5. **Missing data uses defaults.**
+   - Bad: No location means generation fails.
+   - Good: No location uses `neutral arena`.
+
+6. **Every rule must be explainable to the player.**
+   - Bad: "AI decided your character is weak."
+   - Good: "你選擇了守護，加上室內冷靜氛圍，所以防禦與專注提高。"
+
+## Draft Rule Mapping
+
+First-pass rule mapping should be simple and capped:
+
+```text
+allowed inputs
+  -> normalized tags
+  -> rule categories
+  -> capped stat modifiers
+  -> traits / skills / art prompt
+```
+
+Suggested caps:
+
+- One field can modify a stat by at most `+4` to `+8` in MVP.
+- Total profile modifiers should keep every stat inside `8..99`.
+- Weakness should always be a tradeoff, not a pure penalty.
+- Rarity should not be based on judging the real person.
+
+Example:
+
+```text
+User says:
+  values = knowledge
+  weakness = overthinking
+  signature item = laptop
+  place type = street
+  time mood = neon night
+
+Rules derive:
+  traits = ["解析職能", "霓虹夜行", "資料核心"]
+  stat mods = focus +6, speed +3, guard -2
+  skill flavor = signal burst / analysis lock
+  art prompt = neon street, laptop-like tactical artifact
+```
+
+## Card Stat Line
+
+The Battle Card needs visible battle values because this is a battle game, not only an image generator.
+
+First visible stats:
+
+- `HP`: how much damage the character can take.
+- `ATK`: how hard the character hits.
+- `DEF`: how much damage the character resists.
+- `COST`: how expensive or powerful the card is for future team-building rules.
+- `Level`: current growth stage.
+
+Internal stats can remain richer:
+
+- `power`
+- `speed`
+- `guard`
+- `focus`
+- `luck`
+
+比喻：`HP / ATK / DEF / COST` 是卡面上玩家一眼看到的儀表板；`power / speed / guard / focus / luck` 是引擎裡的零件，負責讓技能和戰鬥有更多變化。
+
+First derivation rule:
+
+```text
+Photo Signal + User-Declared Fields + confirmed Model-Suggested Fields
+  -> internal stats
+  -> visible Card Stat Line
+  -> skills and traits
+```
+
+Draft visible stat mapping:
+
+- `HP` comes mostly from `guard`, `focus`, level, and defensive values.
+- `ATK` comes mostly from `power`, `speed`, focus, and offensive values.
+- `DEF` comes mostly from `guard`, focus, and defensive traits.
+- `COST` comes from rarity, total stat budget, level cap, and skill complexity.
+- `Level` starts at 1 and changes through progression.
+
+Guardrails:
+
+- `COST` should not imply a person's real-world value.
+- Rarity and stats must not be framed as judging the real person.
+- AI image output cannot retroactively change stats.
+- Every visible stat should be explainable from the accepted inputs.
+
 ## Form Structure
 
 ### Step 0: Consent

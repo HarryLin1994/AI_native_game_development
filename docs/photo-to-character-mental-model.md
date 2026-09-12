@@ -129,6 +129,7 @@ The canonical generated character. This is the most important output because bat
 
 - A saved playable object.
 - Combines Character Spec, Card Cover, level, XP, wins, and losses.
+- Shows a Card Stat Line such as HP, ATK, DEF, COST, and Level.
 - Should be usable in Battle Test without needing the Source Photo.
 
 ## Pipeline
@@ -150,6 +151,7 @@ Source Photo + Character Spec
 
 Character Spec + Card Cover + progression defaults
   -> Battle Card
+  -> Card Stat Line
   -> Character Library
   -> Battle Test
 ```
@@ -357,6 +359,7 @@ The first extraction should be `character-generator.js` because it has the highe
 - Visible Traits can affect stats and skills, but should not infer sensitive attributes.
 - Sensitive creative context can affect fiction and mechanics only when explicitly supplied with consent.
 - Capture Context can affect origin, visuals, element bias, skill flavor, and encounter modifiers, but must have a default fallback.
+- Battle Cards must expose visible combat stats generated from allowed photo and user inputs through deterministic rules.
 - Rarity should feel exciting but should not be presented as judging the real person.
 
 ## Test Targets

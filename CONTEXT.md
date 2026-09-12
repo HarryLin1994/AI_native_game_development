@@ -36,6 +36,22 @@ _Avoid_: Tracking data, exact location requirement
 A fallback creative context used when optional User-Supplied Context or Capture Context is missing.
 _Avoid_: Missing data error
 
+**User-Declared Field**:
+A character input that only counts when the player or photo subject explicitly provides it.
+_Avoid_: Model-inferred personal fact
+
+**Model-Suggested Field**:
+A non-sensitive creative suggestion produced from Photo Signal, OCR, or visible scene context. It must be editable or confirmable by the player before it becomes authoritative.
+_Avoid_: Detected truth, hidden inference
+
+**Rule-Derived Field**:
+A game-facing result produced by deterministic project rules from allowed inputs, such as stats, skills, traits, element bias, or growth hooks.
+_Avoid_: AI-decided stat, arbitrary output
+
+**Generation Guardrail**:
+A rule that constrains what models may infer, generate, store, or influence during character creation.
+_Avoid_: Prompt suggestion only
+
 **Age Impression**:
 A fictional age band selected as creative direction for the character. It is not a verified age estimate.
 _Avoid_: Detected age, real age
@@ -75,6 +91,10 @@ _Avoid_: Quality score
 **Stat**:
 A numeric battle attribute on a character, such as power, speed, guard, focus, or luck.
 _Avoid_: Metric, score
+
+**Card Stat Line**:
+The visible combat numbers printed on a Battle Card, such as HP, ATK, DEF, COST, level, and later any game-specific battle values. It is derived from Character Spec and progression through project rules, not freely assigned by an AI model.
+_Avoid_: AI score, person rating, visual quality score
 
 **Trait**:
 A short descriptive tag that summarizes visual, narrative, or tactical identity.
