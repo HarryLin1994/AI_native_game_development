@@ -1,6 +1,8 @@
 const STORAGE_KEY = "photo-character-lab.characters.v1";
 const DEFAULT_SUBJECT_FOCUS = "center_primary_subject";
-const CARD_ART_PROMPT_VERSION = "card-art-prompt-v2.3-face-first-img2img";
+const DEFAULT_CHARACTER_FORM_BRANCH = "humanlike";
+const CHARACTER_FORM_BRANCHES = ["humanlike", "animalized.cat"];
+const CARD_ART_PROMPT_VERSION = "card-art-prompt-v2.4-form-branches";
 
 const els = {
   imageInput: document.querySelector("#imageInput"),
@@ -19,6 +21,7 @@ const els = {
   featureInput: document.querySelector("#featureInput"),
   combatStyleInput: document.querySelector("#combatStyleInput"),
   cardMoodInput: document.querySelector("#cardMoodInput"),
+  characterFormInput: document.querySelector("#characterFormInput"),
   imageModeInput: document.querySelector("#imageModeInput"),
   backstoryInput: document.querySelector("#backstoryInput"),
   valueInput: document.querySelector("#valueInput"),
@@ -400,6 +403,7 @@ function bindEvents() {
     els.featureInput,
     els.combatStyleInput,
     els.cardMoodInput,
+    els.characterFormInput,
     els.imageModeInput,
     els.backstoryInput,
     els.valueInput,
@@ -433,6 +437,20 @@ function readConfiguredImageMode(defaultMode) {
   const params = new URLSearchParams(window.location.search);
   const requestedMode = params.get("imageMode") ?? localStorage.getItem("photo-character-lab.imageMode") ?? defaultMode;
   return ["local", "comfy", "ai"].includes(requestedMode) ? requestedMode : defaultMode;
+}
+
+function readConfiguredCharacterForm(defaultBranch) {
+  const params = new URLSearchParams(window.location.search);
+  const requestedBranch =
+    params.get("form") ??
+    params.get("characterForm") ??
+    localStorage.getItem("photo-character-lab.characterForm") ??
+    defaultBranch;
+  return normalizeCharacterFormBranch(requestedBranch);
+}
+
+function normalizeCharacterFormBranch(value) {
+  return CHARACTER_FORM_BRANCHES.includes(value) ? value : DEFAULT_CHARACTER_FORM_BRANCH;
 }
 
 function updateSummonAvailability() {
@@ -595,6 +613,7 @@ function readGenerationProfile() {
   const combatStyle = els.combatStyleInput.value;
   const combatProfile = combatStyleProfiles[combatStyle] ?? combatStyleProfiles.auto;
   const cardMood = els.cardMoodInput.value;
+  const characterFormBranch = readConfiguredCharacterForm(els.characterFormInput.value);
   const imageMode = readConfiguredImageMode(els.imageModeInput.value);
   const backstory = normalizeFreeText(els.backstoryInput.value, 120);
   const valueKey = els.valueInput.value;
@@ -615,6 +634,7 @@ function readGenerationProfile() {
     combatStyle,
     combatStyleLabel: combatProfile.label,
     cardMood,
+    characterFormBranch,
     imageMode,
     backstory,
     valueKey,
@@ -657,6 +677,7 @@ function createDefaultGenerationProfile() {
     combatStyle: "auto",
     combatStyleLabel: combatProfile.label,
     cardMood: "cinematic",
+    characterFormBranch: DEFAULT_CHARACTER_FORM_BRANCH,
     imageMode: "local",
     backstory: "",
     valueKey: "growth",
@@ -776,6 +797,14 @@ function createOccupationArtifact(occupation) {
 }
 
 function createFutureImagePrompt(title, archetype, appearance, generationProfile, analysis) {
+  const context = createCardArtPromptContext(title, archetype, appearance, generationProfile, analysis);
+  if (context.characterFormBranch === "animalized.cat") {
+    return createAnimalizedCatImagePrompt(context);
+  }
+  return createHumanlikeImagePrompt(context);
+}
+
+function createCardArtPromptContext(title, archetype, appearance, generationProfile, analysis) {
   const feature = generationProfile.featureTags.join("、") || "保留來源照片的主要人物特徵";
   const backstory = generationProfile.backstory || "rising challenger from the Localhost Training Gate";
   const signatureItem = generationProfile.signatureItem || appearance.occupationArtifact;
@@ -784,11 +813,33 @@ function createFutureImagePrompt(title, archetype, appearance, generationProfile
   const promptTags = createPromptTagProfile(analysis);
   const palette = describePaletteForPrompt(analysis);
   const modelFit = describeModelFitProfile(generationProfile);
+  return {
+    title,
+    archetype,
+    appearance,
+    generationProfile,
+    analysis,
+    feature,
+    backstory,
+    signatureItem,
+    setting,
+    weakness,
+    promptTags,
+    palette,
+    modelFit,
+    characterFormBranch: normalizeCharacterFormBranch(generationProfile.characterFormBranch)
+  };
+}
+
+function createHumanlikeImagePrompt(context) {
+  const { title, archetype, appearance, generationProfile, feature, signatureItem, setting, backstory, weakness, promptTags, palette, modelFit } = context;
   return [
     `${CARD_ART_PROMPT_VERSION}`,
+    "CHARACTER FORM BRANCH: humanlike",
     "ROLE/PURPOSE: production character portrait art layer for game UI composition; the card frame and text will be rendered separately by the app",
     `SUBJECT: one target subject only, the same consenting person from the source photo, remade as ${title}, a ${archetype.element} ${archetype.name} game character`,
     "ANATOMY LOCK: preserve the source photo's believable human pose structure; natural hand placement, natural wrist angles, normal shoulder and neck connection, no extra limbs, no duplicated hands",
+    "SOURCE PROPORTION LOCK: preserve believable head size relative to torso, shoulder width, neck length, arm scale, hand scale, and face proportion map from the source photo",
     `IDENTITY LOCK: preserve recognizable facial likeness from the source reference: face shape, jaw impression, eye and brow spacing, nose and mouth proportions, expression character`,
     `TARGET SUBJECT VISIBLE CUES: ${promptTags.subject}`,
     `CHARACTER SPEC: age direction ${generationProfile.ageLabel}; role ${generationProfile.occupation || "unspecified"}; values ${generationProfile.valueLabel}; traits ${feature}; artifact ${signatureItem}; tradeoff ${weakness}`,
@@ -800,6 +851,29 @@ function createFutureImagePrompt(title, archetype, appearance, generationProfile
     "COMPOSITION LOCK: single foreground character, centered face and torso, dynamic but readable pose, background supports the subject, do not draw a trading card, do not draw a card border, no extra foreground people",
     `OUTFIT/PROP DIRECTION: ${appearance.outfit}; ${signatureItem}; keep target-subject clothing cues when visible`,
     "MODEL GUIDANCE: prioritize face likeness and believable human anatomy over style change; keep face recognizable; avoid over-transforming the body"
+  ].join("\n");
+}
+
+function createAnimalizedCatImagePrompt(context) {
+  const { title, archetype, appearance, generationProfile, feature, signatureItem, setting, backstory, weakness, promptTags, palette, modelFit } = context;
+  return [
+    `${CARD_ART_PROMPT_VERSION}`,
+    "CHARACTER FORM BRANCH: animalized.cat",
+    "ROLE/PURPOSE: production animal character portrait art layer for game UI composition; the card frame and text will be rendered separately by the app",
+    `SUBJECT: one solo cat protagonist named ${title}, designed from the consenting source person's visible cues and arcade scene context`,
+    "FORM LOCK: the subject is a cat first, not a human with cat ears, not a human beside a pet, and not two characters",
+    "FEATURE TRANSFER LOCK: transfer identity through visible motifs instead of direct human face likeness: hair tuft shape, headband or head accessory, headphones, clothing color or stripe motif, playful expression attitude, signature prop, scene energy, and palette",
+    "CAT ANATOMY LOCK: one cat head, two ears, one tail, two front paws and two hind legs, or a clearly readable two-arm two-leg mascot body; no extra paws, no extra tails, no multiplied fingers",
+    `TARGET SUBJECT CUE SOURCE: ${promptTags.subject}`,
+    `CHARACTER SPEC: age direction ${generationProfile.ageLabel}; role motif ${generationProfile.occupation || "unspecified"}; values ${generationProfile.valueLabel}; traits ${feature}; artifact ${signatureItem}; tradeoff ${weakness}`,
+    `WORLD CONTEXT FROM PHOTO: ${promptTags.world}`,
+    `SCENE REMAKE: use the world context as inspiration for the cat character's environment; setting seed ${setting}; story seed ${backstory}`,
+    `ART DIRECTION: ${modelFit.style}, stylized cat arcade challenger portrait, clean readable silhouette, expressive cat face, controlled detail density, dramatic rim light, energy accent ${archetype.accent}`,
+    `PALETTE: ${palette}`,
+    `TECHNICAL OUTPUT: full-bleed 768x1024 portrait art layer, no card frame, no UI, no text, no stat panel, no logo, no watermark`,
+    "COMPOSITION LOCK: single foreground cat protagonist, centered face and torso/body, background supports the subject, do not draw a trading card, do not draw a card border, no human foreground character",
+    `OUTFIT/PROP DIRECTION: translate ${appearance.outfit} and ${signatureItem} into cat-sized costume motifs and props; keep source-photo clothing cues as pattern, color, accessory, or emblem`,
+    "MODEL GUIDANCE: prioritize clear cat protagonist form and transferred personal cues; do not preserve a literal human face; avoid plain pet portrait realism"
   ].join("\n");
 }
 
@@ -887,8 +961,8 @@ function describeModelFitProfile(generationProfile) {
   };
 }
 
-function createCardArtNegativePrompt() {
-  return [
+function createCardArtNegativePrompt(characterFormBranch = DEFAULT_CHARACTER_FORM_BRANCH) {
+  const baseNegativePrompt = [
     "text",
     "letters",
     "caption",
@@ -912,8 +986,6 @@ function createCardArtNegativePrompt() {
     "second main character",
     "duplicate person",
     "crowd in foreground",
-    "different face",
-    "face swap",
     "identity document",
     "distorted face",
     "asymmetrical eyes",
@@ -935,7 +1007,22 @@ function createCardArtNegativePrompt() {
     "raw camera snapshot",
     "plain photo retouch",
     "landscape-only image"
-  ].join(", ");
+  ];
+  const branchNegativePrompt =
+    normalizeCharacterFormBranch(characterFormBranch) === "animalized.cat"
+      ? [
+          "human body",
+          "human with cat ears",
+          "cat ears on human",
+          "person standing beside cat",
+          "pet beside person",
+          "extra cat",
+          "extra tail",
+          "extra paws",
+          "random pet photo"
+        ]
+      : ["different face", "face swap", "wrong identity", "broken likeness"];
+  return [...baseNegativePrompt, ...branchNegativePrompt].join(", ");
 }
 
 async function createCard(analysis, sourceImageDataUrl, reroll, generationProfile) {
@@ -947,6 +1034,7 @@ async function createCard(analysis, sourceImageDataUrl, reroll, generationProfil
     generationProfile.features,
     generationProfile.combatStyle,
     generationProfile.cardMood,
+    generationProfile.characterFormBranch,
     generationProfile.backstory,
     generationProfile.valueKey,
     generationProfile.weakness,
@@ -972,11 +1060,12 @@ async function createCard(analysis, sourceImageDataUrl, reroll, generationProfil
   const combatRole = createCombatRole(stats, archetype, generationProfile);
   const lore = createLore(title, archetype, traits, analysis, appearance, personality, generationProfile);
   const futureAiPrompt = createFutureImagePrompt(title, archetype, appearance, generationProfile, analysis);
-  const cardArtNegativePrompt = createCardArtNegativePrompt();
+  const cardArtNegativePrompt = createCardArtNegativePrompt(generationProfile.characterFormBranch);
   const characterSpec = {
     schema: "photo-character-lab.character.v1",
     source: "real_photo_local_analysis",
     identityPolicy: "no_identity_recognition",
+    characterFormBranch: generationProfile.characterFormBranch,
     visualPipeline: {
       retouchMode:
         generationProfile.imageMode === "comfy"
@@ -985,6 +1074,7 @@ async function createCard(analysis, sourceImageDataUrl, reroll, generationProfil
             ? "openai_image_edit"
             : "local_canvas_preview_v1",
       coverMode: "battle_card_cover_canvas_v1",
+      formBranch: generationProfile.characterFormBranch,
       promptVersion: CARD_ART_PROMPT_VERSION,
       prompt: futureAiPrompt,
       negativePrompt: cardArtNegativePrompt

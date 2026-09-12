@@ -47,6 +47,22 @@ npm run dev
 
 Open `http://127.0.0.1:5173`.
 
+### Character Form Branch Testing
+
+The MVP can route prompt generation by character form branch without changing the UI surface:
+
+```text
+http://127.0.0.1:5173/?form=humanlike
+http://127.0.0.1:5173/?form=animalized.cat
+```
+
+Current branches:
+
+- `humanlike`: preserve face likeness, source body proportion, and human anatomy.
+- `animalized.cat`: generate a cat protagonist that transfers the person's visible cues through accessories, expression, outfit motifs, props, and scene energy.
+
+This currently changes prompt construction and Character Spec metadata. Dedicated ComfyUI workflow routing per branch is the next step.
+
 ### Start Local ComfyUI
 
 The local ComfyUI clone is installed under `.local-tools/ComfyUI` and ignored by git.
