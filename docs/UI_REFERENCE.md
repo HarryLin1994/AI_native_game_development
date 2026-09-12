@@ -19,6 +19,13 @@ Core qualities:
 
 比喻：畫面不是一張乾淨名片，而像遊戲機台上的角色面板，資訊很多，但玩家一眼知道哪裡看等級、哪裡看攻擊力。
 
+Current correction:
+
+- The main MVP screen should be card-first, not questionnaire-first.
+- Consent belongs at the game entry / onboarding layer, not inside the card generation panel.
+- The generator panel should keep only photo input and card operations.
+- Questionnaire fields can exist as defaults or a later setup/review flow, but should not dominate the first screen.
+
 ## Reference: Character Library
 
 Reference image:
@@ -110,16 +117,18 @@ Patterns to study:
 
 Purpose:
 
-- Take Source Photo and Generation Profile.
-- Produce Character Spec and card art.
+- Take Source Photo.
+- Produce a Battle Card preview.
 
 Key UI:
 
 - Photo input.
-- Character questions.
 - Generation status.
 - Generated card preview.
 - Save to Character Library.
+- Regenerate / reroll action.
+
+Do not put the full questionnaire here. If player-provided context is needed later, collect it in a separate setup step or progressive review panel.
 
 ### Character Library Screen
 

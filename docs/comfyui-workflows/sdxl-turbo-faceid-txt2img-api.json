@@ -1,0 +1,174 @@
+{
+  "1": {
+    "class_type": "CheckpointLoaderSimple",
+    "_meta": {
+      "title": "Load SDXL Turbo Checkpoint"
+    },
+    "inputs": {
+      "ckpt_name": "sd_xl_turbo_1.0_fp16.safetensors"
+    }
+  },
+  "2": {
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "Source Photo For FaceID Reference"
+    },
+    "inputs": {
+      "image": "__SOURCE_IMAGE__"
+    }
+  },
+  "5": {
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "Positive Card Prompt"
+    },
+    "inputs": {
+      "text": "__PROMPT__",
+      "clip": [
+        "1",
+        1
+      ]
+    }
+  },
+  "6": {
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "Negative Prompt"
+    },
+    "inputs": {
+      "text": "__NEGATIVE_PROMPT__",
+      "clip": [
+        "1",
+        1
+      ]
+    }
+  },
+  "7": {
+    "class_type": "IPAdapterUnifiedLoaderFaceID",
+    "_meta": {
+      "title": "Load FaceID Reference Pipeline"
+    },
+    "inputs": {
+      "model": [
+        "1",
+        0
+      ],
+      "preset": "FACEID PLUS V2",
+      "lora_strength": "__LORA_STRENGTH__",
+      "provider": "CPU"
+    }
+  },
+  "8": {
+    "class_type": "IPAdapterFaceID",
+    "_meta": {
+      "title": "Apply FaceID Conditioning"
+    },
+    "inputs": {
+      "model": [
+        "7",
+        0
+      ],
+      "ipadapter": [
+        "7",
+        1
+      ],
+      "image": [
+        "12",
+        0
+      ],
+      "weight": "__IPADAPTER_WEIGHT__",
+      "weight_faceidv2": "__FACEIDV2_WEIGHT__",
+      "weight_type": "linear",
+      "combine_embeds": "concat",
+      "start_at": 0,
+      "end_at": 1,
+      "embeds_scaling": "V only"
+    }
+  },
+  "9": {
+    "class_type": "KSampler",
+    "_meta": {
+      "title": "SDXL Turbo FaceID Txt2Img"
+    },
+    "inputs": {
+      "model": [
+        "8",
+        0
+      ],
+      "seed": "__SEED__",
+      "steps": 4,
+      "cfg": 1,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "positive": [
+        "5",
+        0
+      ],
+      "negative": [
+        "6",
+        0
+      ],
+      "latent_image": [
+        "13",
+        0
+      ],
+      "denoise": "__DENOISE__"
+    }
+  },
+  "10": {
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "Decode Card Portrait"
+    },
+    "inputs": {
+      "samples": [
+        "9",
+        0
+      ],
+      "vae": [
+        "1",
+        2
+      ]
+    }
+  },
+  "11": {
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Save Generated Card Art"
+    },
+    "inputs": {
+      "filename_prefix": "photo-character-lab/faceid-txt2img-card-art",
+      "images": [
+        "10",
+        0
+      ]
+    }
+  },
+  "12": {
+    "class_type": "ImageScale",
+    "_meta": {
+      "title": "Square FaceID Reference"
+    },
+    "inputs": {
+      "image": [
+        "2",
+        0
+      ],
+      "upscale_method": "lanczos",
+      "width": 768,
+      "height": 768,
+      "crop": "center"
+    }
+  },
+  "13": {
+    "class_type": "EmptyLatentImage",
+    "_meta": {
+      "title": "Blank Card Portrait Latent"
+    },
+    "inputs": {
+      "width": "__WIDTH__",
+      "height": "__HEIGHT__",
+      "batch_size": 1
+    }
+  }
+}

@@ -35,6 +35,26 @@
 - Picture generation 是最吃資源的部分，因此 MVP 需要保留替代路線。
 - 未來可以加入雲端 API 作為高品質模式，但不是本地 MVP 的必要條件。
 
+## 目標驗證平台
+
+目前系統驗證目標是 iOS 與 Mac，但兩者分工不同：
+
+- iOS：優先驗證拍照、上傳、預覽、卡牌操作與遊戲體驗。
+- Mac：優先驗證本地 AI 推論、ComfyUI、開源模型、圖片生成與開發伺服器。
+
+第一版不把 SDXL、FaceID、ComfyUI 這類重模型放進 iPhone 內跑。MVP 先採用：
+
+```text
+iPhone 或 Mac Browser
+  -> 拍照 / 上傳照片
+  -> Mac 本機 Node server
+  -> Mac 本機 ComfyUI + 開源模型
+  -> 回傳卡圖
+  -> Browser 組成卡牌與數值
+```
+
+比喻：iPhone 先當相機和遊戲手把，Mac 先當本地 AI 工房。等玩法和資料流成立後，再決定要用 Godot、Swift、React Native、Core ML 或雲端模式做正式產品化。
+
 ## Picture -> Structured Text -> Picture
 
 MVP 的核心資料流不是單純 `picture -> text -> picture`，而是：
@@ -46,6 +66,8 @@ picture
 ```
 
 其中 `structured text` 指的是 `Character Spec`，也就是機器可讀的角色設定資料。它像角色的「能力表與設定書」，後續卡牌封面、技能、養成、戰鬥都以它為核心。
+
+整體產品產線的 canonical 文件是 [SYSTEM_PIPELINE.md](./SYSTEM_PIPELINE.md)。要拆模組、接模型、改存檔或決定下一步實作前，先讀那份文件。
 
 ## AI 卡圖與角色特色
 
@@ -105,6 +127,24 @@ AI 不能直接決定遊戲規則。模型可以讀字、觀察非敏感照片�
 MVP 的目標路線是：優先研究並接上本機 Picture generation；如果 Mac Air 當下跑不動，Canvas fallback 仍要讓遊戲主流程可以繼續開發。
 
 更完整的本地圖片生成研究記錄在 [LOCAL_IMAGE_GENERATION.md](./LOCAL_IMAGE_GENERATION.md)。
+
+目前狀態：專案已加入 ComfyUI 本機連線檢查與 `/api/comfy-card-art` adapter。這台 Mac Air 已可啟動本機 ComfyUI，使用 MPS 裝置，並已用 `docs/comfyui-workflows/sdxl-turbo-img2img-api.json` 和 SDXL Turbo checkpoint 成功產出 768x1024 PNG smoke image。該 plain img2img baseline 與原圖差異太大，已明確拒絕作為本人相似度或美術品質基準，只保留為 adapter smoke test；`docs/comfyui-workflows/sdxl-turbo-faceid-img2img-api.json` 已接上 IP-Adapter FaceID 並成功產出有效 PNG，相似度比 rejected baseline 好，但目前仍太像照片修飾，不像最終戰鬥卡圖。新的 likeness 目標是「能大幅改變年代、服裝、場景與風格，但臉部身份仍像同一個人」，因此下一步先測 `docs/comfyui-workflows/sdxl-turbo-faceid-txt2img-api.json`：保留 FaceID conditioning，但從空白 latent 生成，而不是拿原圖當 img2img 底稿。若仍不達標，再改測更強的美術 checkpoint、SDXL Lightning-compatible checkpoint、style LoRA，或更強的 identity-preserving workflow。Workflow placeholder 規格記錄在 [comfyui-workflows/README.md](./comfyui-workflows/README.md)。這仍是技術驗證，不是最終美術方向。
+
+目前開發焦點收斂為圖片生成 pipeline 與效果驗收：
+
+```text
+Source Photo
+  -> Photo Signal
+  -> OCR Text Seed
+  -> Visible Semantic Tags
+  -> Character Spec / Prompt Profile
+  -> identity-preserving picture generation
+  -> Effect Review
+```
+
+敵人資料、戰鬥系統、養成、Deck balance 先暫停。等一張本地生成圖通過 [IMAGE_PIPELINE_ACCEPTANCE.md](./IMAGE_PIPELINE_ACCEPTANCE.md) 的 likeness、照片語意、乾淨角色圖層與卡圖潛力驗收後，再恢復下游玩法。
+
+目前順序：先把 `Visible Semantic Tags` 做到 VLM 可產生、可人工確認、可分組、可進 prompt 的高階滿意版本，再更換或調整 SDXL Turbo / SDXL-Lightning / stylized checkpoint。人工輸入只作為 VLM adapter 完成前的校準與覆寫，不是最終玩家流程。原因是如果照片語意輸入不穩，換模型後也無法判斷失敗原因。
 
 ## UI 方向
 

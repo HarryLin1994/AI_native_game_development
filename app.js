@@ -1,4 +1,6 @@
 const STORAGE_KEY = "photo-character-lab.characters.v1";
+const DEFAULT_SUBJECT_FOCUS = "center_primary_subject";
+const CARD_ART_PROMPT_VERSION = "card-art-prompt-v2.3-face-first-img2img";
 
 const els = {
   imageInput: document.querySelector("#imageInput"),
@@ -6,9 +8,11 @@ const els = {
   cameraFeed: document.querySelector("#cameraFeed"),
   cameraButton: document.querySelector("#cameraButton"),
   captureButton: document.querySelector("#captureButton"),
+  visionTagsButton: document.querySelector("#visionTagsButton"),
   summonButton: document.querySelector("#summonButton"),
   saveCardButton: document.querySelector("#saveCardButton"),
   rerollButton: document.querySelector("#rerollButton"),
+  semanticTagsInput: document.querySelector("#semanticTagsInput"),
   sigilInput: document.querySelector("#sigilInput"),
   ageInput: document.querySelector("#ageInput"),
   occupationInput: document.querySelector("#occupationInput"),
@@ -16,6 +20,12 @@ const els = {
   combatStyleInput: document.querySelector("#combatStyleInput"),
   cardMoodInput: document.querySelector("#cardMoodInput"),
   imageModeInput: document.querySelector("#imageModeInput"),
+  backstoryInput: document.querySelector("#backstoryInput"),
+  valueInput: document.querySelector("#valueInput"),
+  weaknessInput: document.querySelector("#weaknessInput"),
+  signatureItemInput: document.querySelector("#signatureItemInput"),
+  placeTypeInput: document.querySelector("#placeTypeInput"),
+  timeMoodInput: document.querySelector("#timeMoodInput"),
   analysisCanvas: document.querySelector("#analysisCanvas"),
   analysisGrid: document.querySelector("#analysisGrid"),
   analysisState: document.querySelector("#analysisState"),
@@ -111,6 +121,13 @@ const statLabels = {
   luck: "幸運"
 };
 
+const cardStatLabels = {
+  hp: "HP",
+  atk: "ATK",
+  def: "DEF",
+  cost: "COST"
+};
+
 const metricLabels = {
   brightness: "亮度",
   contrast: "對比",
@@ -198,6 +215,114 @@ const combatStyleProfiles = {
   }
 };
 
+const valueProfiles = {
+  growth: {
+    label: "成長",
+    statMods: { focus: 2, luck: 2 },
+    trait: "成長意志",
+    skillWord: "成長",
+    archetypeBias: { wild: 0.12, tide: 0.1 }
+  },
+  friendship: {
+    label: "友情",
+    statMods: { focus: 4, guard: 4 },
+    trait: "羈絆核心",
+    skillWord: "羈絆",
+    archetypeBias: { tide: 0.22, aegis: 0.18 }
+  },
+  freedom: {
+    label: "自由",
+    statMods: { speed: 6, luck: 3, guard: -1 },
+    trait: "自由步伐",
+    skillWord: "疾行",
+    archetypeBias: { volt: 0.25, wild: 0.12 }
+  },
+  order: {
+    label: "秩序",
+    statMods: { guard: 5, focus: 4, speed: -1 },
+    trait: "秩序框架",
+    skillWord: "律令",
+    archetypeBias: { aegis: 0.22, veil: 0.14 }
+  },
+  victory: {
+    label: "勝利",
+    statMods: { power: 6, speed: 2, guard: -1 },
+    trait: "勝利執念",
+    skillWord: "決勝",
+    archetypeBias: { flare: 0.24, volt: 0.1 }
+  },
+  knowledge: {
+    label: "知識",
+    statMods: { focus: 7, luck: 1 },
+    trait: "知識索引",
+    skillWord: "洞察",
+    archetypeBias: { veil: 0.22, volt: 0.16 }
+  },
+  protection: {
+    label: "守護",
+    statMods: { guard: 7, focus: 2, speed: -1 },
+    trait: "守護誓約",
+    skillWord: "守護",
+    archetypeBias: { aegis: 0.28, tide: 0.12 }
+  }
+};
+
+const placeTypeProfiles = {
+  neutral: { label: "中性訓練場", statMods: {}, trait: "訓練場出身", archetypeBias: {} },
+  indoor: { label: "室內", statMods: { focus: 2, guard: 1 }, trait: "室內戰術", archetypeBias: { veil: 0.14, aegis: 0.1 } },
+  street: { label: "街道", statMods: { speed: 3, luck: 1 }, trait: "街頭節奏", archetypeBias: { volt: 0.18, veil: 0.1 } },
+  school: { label: "學校", statMods: { focus: 4, luck: 1 }, trait: "學院迴路", archetypeBias: { tide: 0.12, veil: 0.12 } },
+  office: { label: "辦公室", statMods: { focus: 3, guard: 2 }, trait: "指令中樞", archetypeBias: { volt: 0.14, aegis: 0.12 } },
+  park: { label: "公園", statMods: { luck: 3, guard: 1 }, trait: "綠地呼吸", archetypeBias: { wild: 0.2, tide: 0.1 } },
+  beach: { label: "海邊", statMods: { focus: 2, luck: 2 }, trait: "潮線記憶", archetypeBias: { tide: 0.28 } },
+  mountain: { label: "山區", statMods: { guard: 3, power: 2 }, trait: "山脊耐性", archetypeBias: { wild: 0.22, aegis: 0.14 } },
+  transit: { label: "交通場所", statMods: { speed: 4, focus: 1 }, trait: "轉乘步法", archetypeBias: { volt: 0.22 } }
+};
+
+const timeMoodProfiles = {
+  clear: { label: "清晰日常", statMods: { focus: 1, guard: 1 }, trait: "清晰基準", archetypeBias: {} },
+  sunny: { label: "晴朗", statMods: { power: 2, speed: 1 }, trait: "日光脈動", archetypeBias: { flare: 0.16, wild: 0.08 } },
+  rainy: { label: "雨天", statMods: { focus: 2, guard: 2 }, trait: "雨幕節奏", archetypeBias: { tide: 0.22, veil: 0.08 } },
+  night: { label: "夜晚", statMods: { focus: 2, luck: 2 }, trait: "夜行視野", archetypeBias: { veil: 0.2, volt: 0.08 } },
+  dusk: { label: "黃昏", statMods: { power: 1, focus: 2 }, trait: "黃昏臨界", archetypeBias: { flare: 0.12, veil: 0.12 } },
+  neon: { label: "霓虹", statMods: { speed: 3, focus: 1 }, trait: "霓虹訊號", archetypeBias: { volt: 0.24, veil: 0.1 } },
+  quiet: { label: "安靜", statMods: { focus: 3, guard: 1 }, trait: "靜默判讀", archetypeBias: { tide: 0.12, veil: 0.1 } },
+  chaotic: { label: "混亂", statMods: { luck: 4, speed: 1, guard: -1 }, trait: "混線反應", archetypeBias: { wild: 0.18, volt: 0.12 } }
+};
+
+const weaknessRules = [
+  {
+    patterns: ["過度分析", "想太多", "猶豫", "overthink"],
+    statMods: { focus: 6, speed: -2 },
+    trait: "思考負荷",
+    tradeoff: "專注提高，但出手節奏偏慢。"
+  },
+  {
+    patterns: ["衝動", "急躁", "莽撞", "impulsive"],
+    statMods: { power: 5, guard: -2 },
+    trait: "衝鋒代價",
+    tradeoff: "開場火力提高，但防禦較不穩。"
+  },
+  {
+    patterns: ["失去隊友", "隊友", "孤單", "alone"],
+    statMods: { guard: 4, focus: 2, luck: -1 },
+    trait: "羈絆壓力",
+    tradeoff: "隊友受傷時更強，但單獨作戰較保守。"
+  },
+  {
+    patterns: ["消耗", "疲勞", "體力", "高耗能"],
+    statMods: { power: 4, focus: 4, speed: -2 },
+    trait: "高耗能核心",
+    tradeoff: "技能威力提高，但需要冷卻與代價。"
+  },
+  {
+    patterns: ["脆弱", "不耐打", "怕痛", "fragile"],
+    statMods: { speed: 4, luck: 2, guard: -3 },
+    trait: "玻璃步伐",
+    tradeoff: "迴避與爆發提高，但承受傷害能力下降。"
+  }
+];
+
 const occupationRules = [
   {
     patterns: ["工程", "程式", "developer", "engineer", "研究", "科學", "資料"],
@@ -253,6 +378,7 @@ function bindEvents() {
   els.imageInput.addEventListener("change", handleImageUpload);
   els.cameraButton.addEventListener("click", toggleCamera);
   els.captureButton.addEventListener("click", captureCameraFrame);
+  els.visionTagsButton.addEventListener("click", suggestVisibleSemanticTags);
   els.summonButton.addEventListener("click", summonCard);
   els.saveCardButton.addEventListener("click", saveGeneratedCard);
   els.rerollButton.addEventListener("click", rerollCardTitle);
@@ -261,7 +387,27 @@ function bindEvents() {
       analyzeCurrentImage();
     }
   });
-  [els.ageInput, els.occupationInput, els.featureInput, els.combatStyleInput, els.cardMoodInput, els.imageModeInput].forEach((input) => {
+  els.semanticTagsInput.addEventListener("input", () => {
+    if (state.sourceImage) {
+      analyzeCurrentImage();
+      els.saveCardButton.disabled = true;
+      setStatus("語意已更新");
+    }
+  });
+  [
+    els.ageInput,
+    els.occupationInput,
+    els.featureInput,
+    els.combatStyleInput,
+    els.cardMoodInput,
+    els.imageModeInput,
+    els.backstoryInput,
+    els.valueInput,
+    els.weaknessInput,
+    els.signatureItemInput,
+    els.placeTypeInput,
+    els.timeMoodInput
+  ].forEach((input) => {
     input.addEventListener("input", markProfileChanged);
     input.addEventListener("change", markProfileChanged);
   });
@@ -273,17 +419,40 @@ function bindEvents() {
 }
 
 function markProfileChanged() {
+  updateSummonAvailability();
   if (!state.sourceImage) return;
   els.saveCardButton.disabled = true;
   setStatus("設定已更新");
 }
 
+function hasPhotoConsent() {
+  return true;
+}
+
+function readConfiguredImageMode(defaultMode) {
+  const params = new URLSearchParams(window.location.search);
+  const requestedMode = params.get("imageMode") ?? localStorage.getItem("photo-character-lab.imageMode") ?? defaultMode;
+  return ["local", "comfy", "ai"].includes(requestedMode) ? requestedMode : defaultMode;
+}
+
+function updateSummonAvailability() {
+  els.summonButton.disabled = !state.sourceImage || !hasPhotoConsent();
+  els.visionTagsButton.disabled = !state.sourceImage;
+}
+
 async function handleImageUpload(event) {
   const file = event.target.files?.[0];
   if (!file) return;
-  await stopCamera();
-  const dataUrl = await readFileAsDataUrl(file);
-  await setSourceImage(dataUrl);
+  try {
+    await stopCamera();
+    const dataUrl = await readFileAsDataUrl(file);
+    await setSourceImage(dataUrl);
+  } catch (error) {
+    console.warn(error);
+    event.target.value = "";
+    setStatus(error.message || "照片無法使用");
+    updateSummonAvailability();
+  }
 }
 
 async function toggleCamera() {
@@ -300,6 +469,7 @@ async function toggleCamera() {
     state.stream = stream;
     els.cameraFeed.srcObject = stream;
     await els.cameraFeed.play();
+    await waitForCameraFrame(els.cameraFeed, { checkBrightness: false });
     els.captureFrame.classList.add("has-video");
     els.captureFrame.classList.remove("has-image");
     els.captureButton.disabled = false;
@@ -323,24 +493,27 @@ async function stopCamera() {
 
 async function captureCameraFrame() {
   if (!state.stream) return;
-  const canvas = document.createElement("canvas");
-  const video = els.cameraFeed;
-  canvas.width = video.videoWidth || 960;
-  canvas.height = video.videoHeight || 1280;
-  const ctx = canvas.getContext("2d", { willReadFrequently: true });
-  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-  const dataUrl = canvas.toDataURL("image/jpeg", 0.82);
-  await setSourceImage(dataUrl);
-  await stopCamera();
+  try {
+    setStatus("拍攝中");
+    const dataUrl = await captureBestCameraFrame(state.stream, els.cameraFeed);
+    await setSourceImage(dataUrl);
+    await stopCamera();
+  } catch (error) {
+    console.warn(error);
+    setStatus(error.message || "拍攝失敗，請重新拍攝");
+    updateSummonAvailability();
+  }
 }
 
 async function setSourceImage(dataUrl) {
-  state.sourceImage = await normalizeImage(dataUrl);
+  const normalizedImage = await normalizeImage(dataUrl);
+  await assertUsableSourceImageDataUrl(normalizedImage);
+  state.sourceImage = normalizedImage;
   state.generatedCard = null;
   state.reroll = 0;
   els.imagePreview.src = state.sourceImage;
   els.captureFrame.classList.add("has-image");
-  els.summonButton.disabled = false;
+  updateSummonAvailability();
   els.saveCardButton.disabled = true;
   els.rerollButton.disabled = true;
   await analyzeCurrentImage();
@@ -349,21 +522,49 @@ async function setSourceImage(dataUrl) {
 async function analyzeCurrentImage() {
   if (!state.sourceImage) return;
   setStatus("分析中");
-  state.analysis = await analyzeImage(state.sourceImage, els.sigilInput.value);
+  state.analysis = await analyzeImage(state.sourceImage, els.sigilInput.value, els.semanticTagsInput.value);
   renderAnalysis(state.analysis);
+  updateSummonAvailability();
   setStatus("可生成");
+}
+
+async function suggestVisibleSemanticTags() {
+  if (!state.sourceImage) return;
+  try {
+    setStatus("VLM 解析中");
+    els.visionTagsButton.disabled = true;
+    const subjectImageDataUrl = await createCenterSubjectCropDataUrl(state.sourceImage);
+    const result = await requestVisionTags(state.sourceImage, subjectImageDataUrl);
+    if (!result.tags?.length) {
+      setStatus("VLM 沒有回傳可用標籤");
+      return;
+    }
+    els.semanticTagsInput.value = result.tags.join(", ");
+    await analyzeCurrentImage();
+    els.saveCardButton.disabled = true;
+    setStatus(`VLM 候選 ${result.tags.length} 個`);
+  } catch (error) {
+    console.warn(error);
+    setStatus(error.message || "VLM 解析失敗");
+  } finally {
+    updateSummonAvailability();
+  }
 }
 
 async function summonCard() {
   if (!state.analysis || !state.sourceImage) return;
-  setStatus("生成角色中");
+  if (!hasPhotoConsent()) {
+    setStatus("請確認照片同意");
+    return;
+  }
+  setStatus("生成卡牌中");
   els.summonButton.disabled = true;
   state.generatedCard = await createCard(state.analysis, state.sourceImage, state.reroll, readGenerationProfile());
   renderCard(state.generatedCard);
   els.saveCardButton.disabled = false;
   els.rerollButton.disabled = false;
-  els.summonButton.disabled = false;
-  setStatus(`${state.generatedCard.rarity.name} 角色生成`);
+  updateSummonAvailability();
+  setStatus(`${state.generatedCard.rarity.name} 卡牌生成`);
 }
 
 function rerollCardTitle() {
@@ -394,8 +595,18 @@ function readGenerationProfile() {
   const combatStyle = els.combatStyleInput.value;
   const combatProfile = combatStyleProfiles[combatStyle] ?? combatStyleProfiles.auto;
   const cardMood = els.cardMoodInput.value;
-  const imageMode = els.imageModeInput.value;
+  const imageMode = readConfiguredImageMode(els.imageModeInput.value);
+  const backstory = normalizeFreeText(els.backstoryInput.value, 120);
+  const valueKey = els.valueInput.value;
+  const valueProfile = valueProfiles[valueKey] ?? valueProfiles.growth;
+  const weakness = normalizeFreeText(els.weaknessInput.value, 80);
+  const signatureItem = normalizeFreeText(els.signatureItemInput.value, 36);
+  const placeType = els.placeTypeInput.value;
+  const placeProfile = placeTypeProfiles[placeType] ?? placeTypeProfiles.neutral;
+  const timeMood = els.timeMoodInput.value;
+  const timeProfile = timeMoodProfiles[timeMood] ?? timeMoodProfiles.clear;
   return {
+    photoConsent: hasPhotoConsent(),
     ageBand,
     ageLabel: ageProfile.label,
     occupation,
@@ -404,7 +615,71 @@ function readGenerationProfile() {
     combatStyle,
     combatStyleLabel: combatProfile.label,
     cardMood,
-    imageMode
+    imageMode,
+    backstory,
+    valueKey,
+    valueLabel: valueProfile.label,
+    weakness,
+    weaknessRule: matchWeakness(weakness)?.trait ?? "",
+    signatureItem,
+    placeType,
+    placeTypeLabel: placeProfile.label,
+    timeMood,
+    timeMoodLabel: timeProfile.label,
+    userSuppliedContext: {
+      backstory,
+      values: [valueKey],
+      weakness,
+      signatureItem
+    },
+    captureContext: {
+      placeType,
+      timeMood,
+      placeTypeLabel: placeProfile.label,
+      timeMoodLabel: timeProfile.label
+    }
+  };
+}
+
+function createDefaultGenerationProfile() {
+  const ageProfile = ageProfiles.young_adult;
+  const combatProfile = combatStyleProfiles.auto;
+  const valueProfile = valueProfiles.growth;
+  const placeProfile = placeTypeProfiles.neutral;
+  const timeProfile = timeMoodProfiles.clear;
+  return {
+    photoConsent: false,
+    ageBand: "young_adult",
+    ageLabel: ageProfile.label,
+    occupation: "",
+    features: "",
+    featureTags: [],
+    combatStyle: "auto",
+    combatStyleLabel: combatProfile.label,
+    cardMood: "cinematic",
+    imageMode: "local",
+    backstory: "",
+    valueKey: "growth",
+    valueLabel: valueProfile.label,
+    weakness: "",
+    weaknessRule: "",
+    signatureItem: "",
+    placeType: "neutral",
+    placeTypeLabel: placeProfile.label,
+    timeMood: "clear",
+    timeMoodLabel: timeProfile.label,
+    userSuppliedContext: {
+      backstory: "",
+      values: ["growth"],
+      weakness: "",
+      signatureItem: ""
+    },
+    captureContext: {
+      placeType: "neutral",
+      timeMood: "clear",
+      placeTypeLabel: placeProfile.label,
+      timeMoodLabel: timeProfile.label
+    }
   };
 }
 
@@ -434,14 +709,30 @@ function matchOccupation(value) {
   return occupationRules.find((rule) => rule.patterns.some((pattern) => text.includes(pattern.toLowerCase()))) ?? null;
 }
 
+function matchWeakness(value) {
+  const text = value.trim().toLowerCase();
+  if (!text) return null;
+  return weaknessRules.find((rule) => rule.patterns.some((pattern) => text.includes(pattern.toLowerCase()))) ?? null;
+}
+
 function applyProfileStatMods(stats, generationProfile) {
   const ageProfile = ageProfiles[generationProfile.ageBand] ?? ageProfiles.young_adult;
   const combatProfile = combatStyleProfiles[generationProfile.combatStyle] ?? combatStyleProfiles.auto;
   const occupationMatch = matchOccupation(generationProfile.occupation);
+  const valueProfile = valueProfiles[generationProfile.valueKey] ?? valueProfiles.growth;
+  const placeProfile = placeTypeProfiles[generationProfile.placeType] ?? placeTypeProfiles.neutral;
+  const timeProfile = timeMoodProfiles[generationProfile.timeMood] ?? timeMoodProfiles.clear;
+  const weaknessMatch = matchWeakness(generationProfile.weakness);
   applyStatMods(stats, ageProfile.statMods);
   applyStatMods(stats, combatProfile.statMods);
+  applyStatMods(stats, valueProfile.statMods);
+  applyStatMods(stats, placeProfile.statMods);
+  applyStatMods(stats, timeProfile.statMods);
   if (occupationMatch) {
     applyStatMods(stats, occupationMatch.statMods);
+  }
+  if (weaknessMatch) {
+    applyStatMods(stats, weaknessMatch.statMods);
   }
 
   for (const tag of generationProfile.featureTags) {
@@ -464,6 +755,13 @@ function applyStatMods(stats, mods) {
   }
 }
 
+function applyArchetypeBias(scores, bias) {
+  for (const [key, value] of Object.entries(bias ?? {})) {
+    const score = scores.find((item) => item.key === key);
+    if (score) score.score += value;
+  }
+}
+
 function createOccupationArtifact(occupation) {
   const match = matchOccupation(occupation);
   if (!occupation.trim()) return "無名徽記";
@@ -477,18 +775,167 @@ function createOccupationArtifact(occupation) {
   return `${occupation.slice(0, 6)}徽記`;
 }
 
-function createFutureImagePrompt(title, archetype, appearance, generationProfile) {
+function createFutureImagePrompt(title, archetype, appearance, generationProfile, analysis) {
   const feature = generationProfile.featureTags.join("、") || "保留來源照片的主要人物特徵";
+  const backstory = generationProfile.backstory || "rising challenger from the Localhost Training Gate";
+  const signatureItem = generationProfile.signatureItem || appearance.occupationArtifact;
+  const setting = `${generationProfile.placeTypeLabel} / ${generationProfile.timeMoodLabel}`;
+  const weakness = generationProfile.weakness ? `tradeoff motif ${generationProfile.weakness}` : "balanced growth tradeoff";
+  const promptTags = createPromptTagProfile(analysis);
+  const palette = describePaletteForPrompt(analysis);
+  const modelFit = describeModelFitProfile(generationProfile);
   return [
-    "Use case: identity-preserve",
-    "Asset type: battle card cover",
-    `Primary request: turn the source photo into a polished game character portrait and battle card cover for ${title}`,
-    `Subject: the same person from the source photo, transformed into a ${archetype.element} ${archetype.name}`,
-    `Style/medium: ${generationProfile.cardMood} trading card illustration, premium mobile game finish`,
-    `Character details: age impression ${generationProfile.ageLabel}, occupation ${generationProfile.occupation || "unspecified"}, features ${feature}`,
-    `Outfit and props: ${appearance.outfit}, ${appearance.occupationArtifact}`,
-    "Constraints: preserve the person's broad identity cues without face recognition claims; no logos; no watermark; no extra people"
+    `${CARD_ART_PROMPT_VERSION}`,
+    "ROLE/PURPOSE: production character portrait art layer for game UI composition; the card frame and text will be rendered separately by the app",
+    `SUBJECT: one target subject only, the same consenting person from the source photo, remade as ${title}, a ${archetype.element} ${archetype.name} game character`,
+    "ANATOMY LOCK: preserve the source photo's believable human pose structure; natural hand placement, natural wrist angles, normal shoulder and neck connection, no extra limbs, no duplicated hands",
+    `IDENTITY LOCK: preserve recognizable facial likeness from the source reference: face shape, jaw impression, eye and brow spacing, nose and mouth proportions, expression character`,
+    `TARGET SUBJECT VISIBLE CUES: ${promptTags.subject}`,
+    `CHARACTER SPEC: age direction ${generationProfile.ageLabel}; role ${generationProfile.occupation || "unspecified"}; values ${generationProfile.valueLabel}; traits ${feature}; artifact ${signatureItem}; tradeoff ${weakness}`,
+    `WORLD CONTEXT FROM PHOTO: ${promptTags.world}`,
+    `SCENE REMAKE: use the world context as inspiration, not as a literal photo trace; setting seed ${setting}; story seed ${backstory}`,
+    `ART DIRECTION: ${modelFit.style}, high-contrast anime-real game character illustration, heroic upper-body crop, clean readable silhouette, sharp focal face, controlled detail density, dramatic rim light, energy accent ${archetype.accent}`,
+    `PALETTE: ${palette}`,
+    `TECHNICAL OUTPUT: full-bleed 768x1024 portrait art layer, no card frame, no UI, no text, no stat panel, no logo, no watermark`,
+    "COMPOSITION LOCK: single foreground character, centered face and torso, dynamic but readable pose, background supports the subject, do not draw a trading card, do not draw a card border, no extra foreground people",
+    `OUTFIT/PROP DIRECTION: ${appearance.outfit}; ${signatureItem}; keep target-subject clothing cues when visible`,
+    "MODEL GUIDANCE: prioritize face likeness and believable human anatomy over style change; keep face recognizable; avoid over-transforming the body"
   ].join("\n");
+}
+
+function describePhotoSignalsForPrompt(analysis) {
+  if (!analysis) return "no photo analysis available; use neutral training gate defaults";
+  const m = analysis.metrics;
+  const palette = (analysis.palette.length ? analysis.palette : [analysis.averageColor])
+    .slice(0, 4)
+    .map((color) => `${color.label} ${color.hex}`)
+    .join(", ");
+  const semanticTags = describeSemanticGroupsForPrompt(analysis);
+  const intensity = [
+    `brightness ${describeMetricBand(m.brightness)}`,
+    `contrast ${describeMetricBand(m.contrast)}`,
+    `saturation ${describeMetricBand(m.saturation)}`,
+    `edge density ${describeMetricBand(m.edgeDensity)}`,
+    `center focus ${describeMetricBand(m.centerFocus)}`,
+    `symmetry ${describeMetricBand(m.symmetry)}`
+  ].join(", ");
+  const textSeed = analysis.textSeed ? `, OCR/manual text seed "${analysis.textSeed.slice(0, 32)}"` : "";
+  return `palette ${palette}; ${intensity}; ${semanticTags}${textSeed}`;
+}
+
+function describeMetricBand(value) {
+  if (value >= 0.68) return "high";
+  if (value >= 0.42) return "medium";
+  return "low";
+}
+
+function describeSemanticGroupsForPrompt(analysis) {
+  const groups = analysis.visibleSemanticTagGroups ?? {};
+  const orderedKeys = ["personAppearance", "scene", "activity", "object", "state", "clothing", "lighting", "composition", "visualSignal", "other"];
+  const parts = orderedKeys
+    .filter((key) => groups[key]?.length)
+    .map((key) => `${key} [${groups[key].join(", ")}]`);
+  if (!parts.length) return "visible semantic tags pending local vision model";
+  return `visible semantic tags ${parts.join("; ")}`;
+}
+
+function createPromptTagProfile(analysis) {
+  const groups = analysis?.visibleSemanticTagGroups ?? {};
+  const subjectParts = [
+    describeTagGroup(groups.personAppearance, "appearance"),
+    describeTagGroup(groups.clothing, "clothing"),
+    describeTagGroup(groups.state, "state")
+  ].filter(Boolean);
+  const worldParts = [
+    describeTagGroup(groups.scene, "scene"),
+    describeTagGroup(groups.activity, "activity"),
+    describeTagGroup(groups.object, "objects"),
+    describeTagGroup(groups.lighting, "lighting"),
+    describeTagGroup(groups.composition, "composition"),
+    describeTagGroup(groups.visualSignal, "visual signal")
+  ].filter(Boolean);
+  return {
+    subject: subjectParts.join("; ") || "target subject details pending local VLM; rely on source photo reference",
+    world: worldParts.join("; ") || "neutral card-world training space"
+  };
+}
+
+function describeTagGroup(tags, label) {
+  if (!tags?.length) return "";
+  return `${label} [${tags.slice(0, 8).join(", ")}]`;
+}
+
+function describePaletteForPrompt(analysis) {
+  if (!analysis) return "balanced card-art palette with clear subject/background separation";
+  const colors = (analysis.palette.length ? analysis.palette : [analysis.averageColor])
+    .slice(0, 4)
+    .map((color) => `${color.label} ${color.hex}`)
+    .join(", ");
+  const m = analysis.metrics;
+  return `${colors}; brightness ${describeMetricBand(m.brightness)}, contrast ${describeMetricBand(m.contrast)}, saturation ${describeMetricBand(m.saturation)}`;
+}
+
+function describeModelFitProfile(generationProfile) {
+  const moodStyles = {
+    cinematic: "cinematic game-character portrait with crisp illustration edges",
+    neon: "neon arcade game-character portrait with saturated accent lighting",
+    royal: "premium heroic game-character portrait with polished costume shapes",
+    arcane: "mystic game-character portrait with controlled magical glow"
+  };
+  return {
+    style: moodStyles[generationProfile.cardMood] ?? "cinematic game-character portrait with crisp illustration edges"
+  };
+}
+
+function createCardArtNegativePrompt() {
+  return [
+    "text",
+    "letters",
+    "caption",
+    "logo",
+    "watermark",
+    "signature",
+    "card frame",
+    "trading card",
+    "card border",
+    "decorative frame",
+    "tarot frame",
+    "ornate border",
+    "UI border",
+    "stat panel",
+    "nameplate",
+    "label",
+    "title text",
+    "text banner",
+    "gibberish text",
+    "extra foreground person",
+    "second main character",
+    "duplicate person",
+    "crowd in foreground",
+    "different face",
+    "face swap",
+    "identity document",
+    "distorted face",
+    "asymmetrical eyes",
+    "bad anatomy",
+    "deformed hands",
+    "mutated fingers",
+    "extra hand",
+    "extra arm",
+    "extra fingers",
+    "missing fingers",
+    "twisted arm",
+    "broken wrist",
+    "dislocated shoulder",
+    "unnatural neck",
+    "warped torso",
+    "cropped head",
+    "low quality",
+    "blurry face",
+    "raw camera snapshot",
+    "plain photo retouch",
+    "landscape-only image"
+  ].join(", ");
 }
 
 async function createCard(analysis, sourceImageDataUrl, reroll, generationProfile) {
@@ -500,6 +947,12 @@ async function createCard(analysis, sourceImageDataUrl, reroll, generationProfil
     generationProfile.features,
     generationProfile.combatStyle,
     generationProfile.cardMood,
+    generationProfile.backstory,
+    generationProfile.valueKey,
+    generationProfile.weakness,
+    generationProfile.signatureItem,
+    generationProfile.placeType,
+    generationProfile.timeMood,
     analysis.metrics.brightness.toFixed(4),
     analysis.metrics.contrast.toFixed(4),
     reroll
@@ -513,19 +966,43 @@ async function createCard(analysis, sourceImageDataUrl, reroll, generationProfil
   const hpBase = 96 + Math.round(stats.guard * 1.65 + stats.focus * 0.45);
   const traits = createTraits(analysis, archetype, generationProfile);
   const skills = createSkills(archetype, stats, traits, rng, generationProfile);
+  const cardStatLine = deriveCardStatLineFromParts({ stats, hpBase, level: 1, rarity, skills });
   const appearance = createAppearance(analysis, archetype, rng, generationProfile);
   const personality = createPersonality(analysis, rng, generationProfile);
   const combatRole = createCombatRole(stats, archetype, generationProfile);
   const lore = createLore(title, archetype, traits, analysis, appearance, personality, generationProfile);
-  const futureAiPrompt = createFutureImagePrompt(title, archetype, appearance, generationProfile);
+  const futureAiPrompt = createFutureImagePrompt(title, archetype, appearance, generationProfile, analysis);
+  const cardArtNegativePrompt = createCardArtNegativePrompt();
   const characterSpec = {
     schema: "photo-character-lab.character.v1",
     source: "real_photo_local_analysis",
     identityPolicy: "no_identity_recognition",
     visualPipeline: {
-      retouchMode: generationProfile.imageMode === "ai" ? "openai_image_edit" : "local_canvas_preview_v1",
+      retouchMode:
+        generationProfile.imageMode === "comfy"
+          ? "comfyui_local_workflow"
+          : generationProfile.imageMode === "ai"
+            ? "openai_image_edit"
+            : "local_canvas_preview_v1",
       coverMode: "battle_card_cover_canvas_v1",
-      prompt: futureAiPrompt
+      promptVersion: CARD_ART_PROMPT_VERSION,
+      prompt: futureAiPrompt,
+      negativePrompt: cardArtNegativePrompt
+    },
+    consent: {
+      subject: "user_confirmed",
+      photoUse: generationProfile.photoConsent,
+      sensitiveContextUse: "none",
+      captureContextUse: "manual_coarse"
+    },
+    userSuppliedContext: generationProfile.userSuppliedContext,
+    captureContext: generationProfile.captureContext,
+    photoSemantics: {
+      textSeed: analysis.textSeed,
+      subjectFocus: analysis.subjectFocus,
+      visibleSemanticTags: analysis.visibleSemanticTags,
+      visibleSemanticTagGroups: analysis.visibleSemanticTagGroups,
+      source: analysis.semanticTagSource
     },
     generationProfile,
     name: title,
@@ -537,6 +1014,7 @@ async function createCard(analysis, sourceImageDataUrl, reroll, generationProfil
     combatRole,
     traits,
     stats,
+    cardStatLine,
     skills
   };
   let aiPortraitDataUrl = "";
@@ -544,18 +1022,20 @@ async function createCard(analysis, sourceImageDataUrl, reroll, generationProfil
     mode: generationProfile.imageMode,
     status: "local_preview",
     model: null,
+    promptVersion: CARD_ART_PROMPT_VERSION,
     error: null
   };
 
   if (generationProfile.imageMode === "ai") {
     try {
-      setStatus("真正 AI 修飾中");
+      setStatus("外部 AI 修飾中");
       const aiResult = await requestAiRetouch(sourceImageDataUrl, futureAiPrompt);
       aiPortraitDataUrl = aiResult.imageDataUrl;
       imageGeneration = {
         mode: "ai",
         status: "ai_generated",
         model: aiResult.model,
+        promptVersion: CARD_ART_PROMPT_VERSION,
         error: null
       };
     } catch (error) {
@@ -564,6 +1044,42 @@ async function createCard(analysis, sourceImageDataUrl, reroll, generationProfil
         mode: "ai",
         status: "fallback_local_preview",
         model: null,
+        promptVersion: CARD_ART_PROMPT_VERSION,
+        error: error.message
+      };
+    }
+  }
+
+  if (generationProfile.imageMode === "comfy") {
+    try {
+      setStatus("本機 AI 生圖中");
+      const comfyResult = await requestComfyCardArt(sourceImageDataUrl, futureAiPrompt, {
+        negativePrompt: cardArtNegativePrompt,
+        seed,
+        width: 768,
+        height: 1024
+      });
+      aiPortraitDataUrl = comfyResult.imageDataUrl;
+      imageGeneration = {
+        mode: "comfy",
+        status: "comfy_generated",
+        model: "comfyui",
+        promptVersion: CARD_ART_PROMPT_VERSION,
+        promptId: comfyResult.promptId,
+        workflow: comfyResult.workflow,
+        source: comfyResult.source ?? null,
+        output: comfyResult.output ?? null,
+        error: null
+      };
+    } catch (error) {
+      console.warn(error);
+      imageGeneration = {
+        mode: "comfy",
+        status: "fallback_local_preview",
+        model: "comfyui",
+        promptVersion: CARD_ART_PROMPT_VERSION,
+        source: error.source ?? null,
+        output: error.output ?? null,
         error: error.message
       };
     }
@@ -608,6 +1124,7 @@ async function createCard(analysis, sourceImageDataUrl, reroll, generationProfil
     losses: 0,
     hpBase,
     stats,
+    cardStatLine,
     traits,
     skills,
     appearance,
@@ -657,6 +1174,9 @@ function chooseArchetype(analysis, rng, generationProfile) {
     scores.find((score) => score.key === "flare").score += 0.26;
     scores.find((score) => score.key === "volt").score += 0.22;
   }
+  applyArchetypeBias(scores, valueProfiles[generationProfile.valueKey]?.archetypeBias);
+  applyArchetypeBias(scores, placeTypeProfiles[generationProfile.placeType]?.archetypeBias);
+  applyArchetypeBias(scores, timeMoodProfiles[generationProfile.timeMood]?.archetypeBias);
   scores.sort((a, b) => b.score - a.score);
   return archetypes.find((item) => item.key === scores[0].key) ?? archetypes[0];
 }
@@ -690,6 +1210,50 @@ function createStats(analysis, archetype, rarity, rng, generationProfile = readG
   distributeBonus(stats, rarity.bonus, rng);
   applyProfileStatMods(stats, generationProfile);
   return stats;
+}
+
+function deriveCardStatLine(card) {
+  return deriveCardStatLineFromParts({
+    stats: card.stats ?? {},
+    hpBase: card.hpBase ?? 0,
+    level: card.level ?? 1,
+    rarity: card.rarity ?? rarityTable[0],
+    skills: card.skills ?? []
+  });
+}
+
+function deriveCardStatLineFromParts({ stats, hpBase, level, rarity, skills }) {
+  const rarityBonus = getRarityBonus(rarity);
+  const rarityCost = getRarityCost(rarity);
+  const safeLevel = Math.max(1, Number(level) || 1);
+  const power = Number(stats.power) || 0;
+  const speed = Number(stats.speed) || 0;
+  const guard = Number(stats.guard) || 0;
+  const focus = Number(stats.focus) || 0;
+  const luck = Number(stats.luck) || 0;
+  const total = power + speed + guard + focus + luck;
+  return {
+    hp: Math.round((hpBase + safeLevel * 8) * 34 + guard * 18 + focus * 9 + rarityBonus * 40),
+    atk: Math.round(power * 76 + speed * 28 + focus * 18 + luck * 10 + rarityBonus * 78 + safeLevel * 38),
+    def: Math.round(guard * 72 + focus * 26 + power * 8 + rarityBonus * 64 + safeLevel * 34),
+    cost: clamp(Math.round(4 + rarityCost + total / 68 + skills.length * 2 + safeLevel / 12), 4, 99),
+    level: safeLevel
+  };
+}
+
+function getRarityBonus(rarity) {
+  if (typeof rarity === "object" && rarity?.bonus !== undefined) return Number(rarity.bonus) || 0;
+  return rarityTable.find((item) => item.key === rarity)?.bonus ?? 0;
+}
+
+function getRarityCost(rarity) {
+  const key = typeof rarity === "object" ? rarity?.key : rarity;
+  return {
+    N: 0,
+    R: 6,
+    SR: 12,
+    UR: 20
+  }[key] ?? 0;
 }
 
 function scoreStat(value) {
@@ -730,6 +1294,10 @@ function createTraits(analysis, archetype, generationProfile = readGenerationPro
   const ageProfile = ageProfiles[generationProfile.ageBand] ?? ageProfiles.young_adult;
   const combatProfile = combatStyleProfiles[generationProfile.combatStyle] ?? combatStyleProfiles.auto;
   const occupationMatch = matchOccupation(generationProfile.occupation);
+  const valueProfile = valueProfiles[generationProfile.valueKey] ?? valueProfiles.growth;
+  const placeProfile = placeTypeProfiles[generationProfile.placeType] ?? placeTypeProfiles.neutral;
+  const timeProfile = timeMoodProfiles[generationProfile.timeMood] ?? timeMoodProfiles.clear;
+  const weaknessMatch = matchWeakness(generationProfile.weakness);
   if (m.edgeDensity > 0.52) traits.push("高速輪廓");
   if (m.centerFocus > 0.58) traits.push("中心壓制");
   if (m.symmetry > 0.62) traits.push("穩定姿態");
@@ -739,6 +1307,11 @@ function createTraits(analysis, archetype, generationProfile = readGenerationPro
   traits.push(ageProfile.trait);
   if (combatProfile.trait) traits.push(combatProfile.trait);
   if (occupationMatch?.trait) traits.push(occupationMatch.trait);
+  if (valueProfile.trait) traits.push(valueProfile.trait);
+  if (placeProfile.trait) traits.push(placeProfile.trait);
+  if (timeProfile.trait) traits.push(timeProfile.trait);
+  if (weaknessMatch?.trait) traits.push(weaknessMatch.trait);
+  if (generationProfile.signatureItem) traits.push(`${generationProfile.signatureItem.slice(0, 6)}持有者`);
   for (const tag of generationProfile.featureTags.slice(0, 2)) {
     traits.push(tag);
   }
@@ -763,7 +1336,8 @@ function createAppearance(analysis, archetype, rng, generationProfile = readGene
     rng
   );
   const definingFeature = generationProfile.featureTags[0] ?? "未指定特徵";
-  const occupationArtifact = createOccupationArtifact(generationProfile.occupation);
+  const occupationArtifact = generationProfile.signatureItem || createOccupationArtifact(generationProfile.occupation);
+  const originBackdrop = `${generationProfile.placeTypeLabel ?? "中性訓練場"} / ${generationProfile.timeMoodLabel ?? "清晰日常"}`;
 
   return {
     silhouette,
@@ -772,6 +1346,7 @@ function createAppearance(analysis, archetype, rng, generationProfile = readGene
     outfit,
     definingFeature,
     occupationArtifact,
+    originBackdrop,
     palette: palette.slice(0, 4).map((color) => ({
       name: color.label,
       hex: color.hex,
@@ -783,6 +1358,7 @@ function createAppearance(analysis, archetype, rng, generationProfile = readGene
 function createPersonality(analysis, rng, generationProfile = readGenerationProfile()) {
   const m = analysis.metrics;
   const ageProfile = ageProfiles[generationProfile.ageBand] ?? ageProfiles.young_adult;
+  const weaknessMatch = matchWeakness(generationProfile.weakness);
   const temperament =
     ageProfile.label === "資深" || ageProfile.label === "傳奇"
       ? "沉穩"
@@ -792,14 +1368,14 @@ function createPersonality(analysis, rng, generationProfile = readGenerationProf
           ? "冷靜"
           : "靈活";
   const instinct = m.edgeDensity > 0.56 ? "先手壓制" : m.centerFocus > 0.58 ? "觀察反擊" : "資源累積";
-  const flaw = pick(
-    m.brightness > 0.58 ? ["容易過度相信局勢", "不擅長隱藏意圖"] : ["初期節奏偏慢", "容易被持續干擾"],
-    rng
-  );
+  const flaw =
+    generationProfile.weakness ||
+    pick(m.brightness > 0.58 ? ["容易過度相信局勢", "不擅長隱藏意圖"] : ["初期節奏偏慢", "容易被持續干擾"], rng);
   return {
     temperament,
     instinct,
-    flaw
+    flaw,
+    tradeoff: weaknessMatch?.tradeoff ?? "標準成長代價。"
   };
 }
 
@@ -828,25 +1404,34 @@ function createSkills(archetype, stats, traits, rng, generationProfile = readGen
   const combatProfile = combatStyleProfiles[generationProfile.combatStyle] ?? combatStyleProfiles.auto;
   const ageProfile = ageProfiles[generationProfile.ageBand] ?? ageProfiles.young_adult;
   const occupationMatch = matchOccupation(generationProfile.occupation);
+  const valueProfile = valueProfiles[generationProfile.valueKey] ?? valueProfiles.growth;
+  const weaknessMatch = matchWeakness(generationProfile.weakness);
   const primary = combatProfile.preferredStat ?? archetype.stat;
   const secondary = primary === "power" ? "speed" : primary === "guard" ? "focus" : "power";
   const skillPower = Math.round(stats[primary] * 0.58 + stats[secondary] * 0.22);
   const utilityPower = Math.round(stats.focus * 0.35 + stats.luck * 0.22 + 10);
-  const signatureWord = occupationMatch?.skillWord ?? combatProfile.skillWord ?? ageProfile.skillWord;
+  const signatureWord = occupationMatch?.skillWord ?? combatProfile.skillWord ?? valueProfile.skillWord ?? ageProfile.skillWord;
+  const signatureItem = generationProfile.signatureItem?.slice(0, 8);
   return [
     {
       name: `${signatureWord}${pick(["式", "連段", "戰術"], rng)}`,
       type: "strike",
       power: skillPower,
-      text: `${statLabels[primary]}轉化為一次高倍率攻擊。`
+      text: `${statLabels[primary]}轉化為一次高倍率攻擊，價值核心為${valueProfile.label}。`
     },
     {
-      name: traits.includes("文字契印") ? "契印回路" : `${archetype.element}${combatProfile.preferredStat === "guard" ? "堡壘" : "屏障"}`,
+      name: signatureItem
+        ? `${signatureItem}回路`
+        : traits.includes("文字契印")
+          ? "契印回路"
+          : `${archetype.element}${combatProfile.preferredStat === "guard" ? "堡壘" : "屏障"}`,
       type: "guard",
       power: utilityPower,
-      text: generationProfile.featureTags[0]
-        ? `以${generationProfile.featureTags[0]}作為戰術核心，獲得護盾並降低承受傷害。`
-        : "獲得護盾，並在本回合降低承受傷害。"
+      text: weaknessMatch
+        ? `${weaknessMatch.tradeoff} 發動後獲得護盾並降低承受傷害。`
+        : generationProfile.featureTags[0]
+          ? `以${generationProfile.featureTags[0]}作為戰術核心，獲得護盾並降低承受傷害。`
+          : "獲得護盾，並在本回合降低承受傷害。"
     }
   ];
 }
@@ -855,7 +1440,9 @@ function createLore(title, archetype, traits, analysis, appearance, personality,
   const dominant = analysis.palette[0]?.label ?? "Unknown";
   const occupation = generationProfile.occupation || "未知身份";
   const feature = generationProfile.featureTags[0] ?? "照片特徵";
-  return `${title}是${archetype.element}系${archetype.name}，由${occupation}與${feature}轉化而來。外觀被轉譯為${appearance.silhouette}與${appearance.aura}。性格傾向${personality.temperament}，以${traits.slice(1, 3).join("、") || "原始氣場"}建立戰鬥節奏。主色訊號為 ${dominant}。`;
+  const story = generationProfile.backstory ? `${generationProfile.backstory}。` : "";
+  const weakness = generationProfile.weakness ? `弱點是${generationProfile.weakness}，因此戰鬥帶有${personality.tradeoff}` : "";
+  return `${story}${title}是${archetype.element}系${archetype.name}，由${occupation}、${feature}、${generationProfile.valueLabel}與${appearance.originBackdrop}轉化而來。外觀被轉譯為${appearance.silhouette}與${appearance.aura}。性格傾向${personality.temperament}，以${traits.slice(1, 3).join("、") || "原始氣場"}建立戰鬥節奏。${weakness}主色訊號為 ${dominant}。`;
 }
 
 async function requestAiRetouch(sourceImageDataUrl, prompt) {
@@ -879,6 +1466,59 @@ async function requestAiRetouch(sourceImageDataUrl, prompt) {
   }
   if (!payload.imageDataUrl) {
     throw new Error("AI image API did not return an inline image.");
+  }
+  return payload;
+}
+
+async function requestComfyCardArt(sourceImageDataUrl, prompt, options = {}) {
+  const response = await fetch("/api/comfy-card-art", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json"
+    },
+    body: JSON.stringify({
+      imageDataUrl: sourceImageDataUrl,
+      prompt,
+      negativePrompt: options.negativePrompt ?? createCardArtNegativePrompt(),
+      seed: options.seed,
+      width: options.width ?? 768,
+      height: options.height ?? 1024
+    })
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const detail = payload.message ?? payload.error ?? "ComfyUI image generation failed.";
+    throw new Error(detail);
+  }
+  if (!payload.imageDataUrl) {
+    throw new Error("ComfyUI did not return an inline image.");
+  }
+  try {
+    await assertVisibleImageDataUrl(payload.imageDataUrl);
+  } catch (error) {
+    error.source = payload.source ?? null;
+    error.output = payload.output ?? null;
+    throw error;
+  }
+  return payload;
+}
+
+async function requestVisionTags(sourceImageDataUrl, subjectImageDataUrl) {
+  const response = await fetch("/api/vision-tags", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json"
+    },
+    body: JSON.stringify({
+      imageDataUrl: sourceImageDataUrl,
+      subjectImageDataUrl,
+      subjectFocus: DEFAULT_SUBJECT_FOCUS
+    })
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const detail = payload.hint ?? payload.message ?? payload.error ?? "VLM semantic tag generation failed.";
+    throw new Error(detail);
   }
   return payload;
 }
@@ -1156,7 +1796,7 @@ function wrapCanvasText(ctx, text, x, y, maxWidth, lineHeight, maxLines) {
   }
 }
 
-async function analyzeImage(dataUrl, textSeed) {
+async function analyzeImage(dataUrl, textSeed, semanticTagsText = "") {
   const image = await loadImage(dataUrl);
   const canvas = els.analysisCanvas;
   const ctx = canvas.getContext("2d", { willReadFrequently: true });
@@ -1244,6 +1884,19 @@ async function analyzeImage(dataUrl, textSeed) {
   const textSignal = clamp([...textSeed.trim()].length / 28, 0, 1);
   const hash = hashString(`${samples.join(",")}:${textSeed.trim()}`);
   const avgColor = [rTotal / pixelCount, gTotal / pixelCount, bTotal / pixelCount].map(Math.round);
+  const metrics = {
+    brightness,
+    contrast,
+    saturation,
+    edgeDensity,
+    centerFocus,
+    symmetry,
+    textSignal,
+    colorEntropy,
+    warmth: warmCount / pixelCount,
+    coolness: coolCount / pixelCount,
+    greenSignal: greenCount / pixelCount
+  };
 
   const palette = [...buckets.entries()]
     .sort((a, b) => b[1] - a[1])
@@ -1257,30 +1910,196 @@ async function analyzeImage(dataUrl, textSeed) {
         label: describeColor(rgb)
       };
     });
+  const userSemanticTags = normalizeVisibleSemanticTags(semanticTagsText);
+  const canvasSignalTags = deriveVisibleSemanticTags(metrics);
+  const visibleSemanticTags = mergeUniqueTags([...userSemanticTags, ...canvasSignalTags], 20);
 
   return {
     hash,
     textSeed: textSeed.trim(),
+    subjectFocus: DEFAULT_SUBJECT_FOCUS,
+    visibleSemanticTags,
+    visibleSemanticTagGroups: categorizeVisibleSemanticTags(visibleSemanticTags),
+    semanticTagSource: userSemanticTags.length
+      ? "manual_vlm_calibration_plus_deterministic_canvas_signals_v1"
+      : "deterministic_canvas_signals_v1",
     averageColor: {
       rgb: avgColor,
       hex: rgbToHex(avgColor),
       label: describeColor(avgColor)
     },
     palette,
-    metrics: {
-      brightness,
-      contrast,
-      saturation,
-      edgeDensity,
-      centerFocus,
-      symmetry,
-      textSignal,
-      colorEntropy,
-      warmth: warmCount / pixelCount,
-      coolness: coolCount / pixelCount,
-      greenSignal: greenCount / pixelCount
-    }
+    metrics
   };
+}
+
+function deriveVisibleSemanticTags(metrics) {
+  const tags = [];
+  if (metrics.centerFocus > 0.62) tags.push("centered subject");
+  if (metrics.edgeDensity > 0.58) tags.push("high motion detail");
+  if (metrics.contrast > 0.58) tags.push("dramatic contrast");
+  if (metrics.saturation > 0.58) tags.push("vivid color energy");
+  if (metrics.brightness < 0.36) tags.push("low light mood");
+  if (metrics.brightness > 0.66) tags.push("bright light mood");
+  if (metrics.warmth > metrics.coolness + 0.12) tags.push("warm palette");
+  if (metrics.coolness > metrics.warmth + 0.12) tags.push("cool palette");
+  if (metrics.greenSignal > 0.18) tags.push("green environment cue");
+  if (metrics.symmetry > 0.64) tags.push("balanced composition");
+  return tags.slice(0, 6);
+}
+
+function normalizeVisibleSemanticTags(value) {
+  return mergeUniqueTags(
+    String(value ?? "")
+      .split(/[,，、\n;]/u)
+      .map((tag) => tag.trim())
+      .filter(Boolean)
+      .map((tag) => tag.replace(/\s+/gu, " ").slice(0, 32)),
+    18
+  );
+}
+
+function mergeUniqueTags(tags, limit = 12) {
+  const seen = new Set();
+  const result = [];
+  for (const tag of tags) {
+    const normalized = String(tag ?? "").trim();
+    if (!normalized) continue;
+    const key = normalized.toLocaleLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push(normalized);
+    if (result.length >= limit) break;
+  }
+  return result;
+}
+
+function categorizeVisibleSemanticTags(tags) {
+  const groups = {
+    personAppearance: [],
+    scene: [],
+    activity: [],
+    object: [],
+    state: [],
+    clothing: [],
+    lighting: [],
+    composition: [],
+    visualSignal: [],
+    other: []
+  };
+
+  for (const tag of tags) {
+    const category = chooseSemanticCategory(tag);
+    groups[category].push(tag);
+  }
+
+  return Object.fromEntries(Object.entries(groups).filter(([, values]) => values.length));
+}
+
+function chooseSemanticCategory(tag) {
+  const lower = tag.toLocaleLowerCase();
+  if (/(sweaty|tired|exhausted|celebrating|out of breath|氣喘|流汗|疲憊|慶祝)/u.test(lower)) return "state";
+  if (/(wearing headphones|wearing glasses|wearing sunglasses|wearing headband|wearing cap|wearing hat|headphones on|戴耳機|戴眼鏡|戴墨鏡|戴頭帶|戴帽)/u.test(lower)) return "personAppearance";
+  if (/(playing|dancing|holding|running|training|post-game|跳舞|跑步|訓練|打球|拿著)/u.test(lower)) return "activity";
+  if (/(night club|nightclub|club room|club scene)/u.test(lower)) return "scene";
+  if (/(game console|game machine|game machines|controller|microphone|poster|sign|pac-man|pacman|galaga|disco ball|phone|camera|laptop|book|headphones|手把|麥克風|海報|招牌|手機|相機|筆電|書|耳機)/u.test(lower)) return "object";
+  const categoryPatterns = [
+    {
+      key: "personAppearance",
+      patterns: [
+        "visible face",
+        "face visible",
+        "face",
+        "hair",
+        "hairstyle",
+        "curly",
+        "short hair",
+        "long hair",
+        "bangs",
+        "beard",
+        "mustache",
+        "glasses",
+        "sunglasses",
+        "smile",
+        "smiling",
+        "open mouth",
+        "tongue",
+        "expression",
+        "pose",
+        "standing",
+        "sitting",
+        "upper-body",
+        "full-body",
+        "headband",
+        "visor",
+        "cap",
+        "hat",
+        "accessory",
+        "subject crop",
+        "臉",
+        "可見臉",
+        "頭髮",
+        "髮型",
+        "捲髮",
+        "短髮",
+        "長髮",
+        "瀏海",
+        "鬍子",
+        "眼鏡",
+        "墨鏡",
+        "微笑",
+        "張嘴",
+        "吐舌",
+        "表情",
+        "姿勢",
+        "站姿",
+        "坐姿",
+        "半身",
+        "全身",
+        "頭帶",
+        "帽子",
+        "配件"
+      ]
+    },
+    {
+      key: "scene",
+      patterns: ["basketball court", "court", "gym", "arcade", "street", "beach", "park", "office", "school", "indoor", "outdoor", "籃球場", "球場", "健身房", "街機", "街道", "海邊", "公園", "辦公室", "學校", "室內", "戶外"]
+    },
+    {
+      key: "activity",
+      patterns: ["athlete", "player", "basketball", "running", "dancing", "post-game", "training", "運動", "球員", "籃球", "跑步", "跳舞", "比賽", "訓練", "賽後", "打球"]
+    },
+    {
+      key: "object",
+      patterns: ["ball", "controller", "phone", "camera", "microphone", "laptop", "book", "badge", "headphones", "球", "手把", "手機", "相機", "麥克風", "筆電", "書", "徽章", "耳機"]
+    },
+    {
+      key: "state",
+      patterns: ["sweaty", "tired", "exhausted", "celebrating", "post-game energy", "out of breath", "氣喘", "喘", "流汗", "疲憊", "興奮", "慶祝", "賽後能量"]
+    },
+    {
+      key: "clothing",
+      patterns: ["jersey", "sportswear", "hoodie", "jacket", "suit", "uniform", "dress", "球衣", "運動服", "帽t", "外套", "西裝", "制服", "洋裝"]
+    },
+    {
+      key: "lighting",
+      patterns: ["neon", "sunny", "night", "rainy", "backlit", "low light", "bright light", "霓虹", "晴朗", "夜晚", "雨天", "背光", "低光", "亮光"]
+    },
+    {
+      key: "composition",
+      patterns: ["centered", "close-up", "upper-body", "full-body", "balanced composition", "中心", "特寫", "半身", "全身", "平衡構圖"]
+    },
+    {
+      key: "visualSignal",
+      patterns: ["palette", "contrast", "color", "motion detail", "green environment", "warm", "cool", "vivid", "dramatic", "高對比", "色彩", "動勢", "暖色", "冷色", "鮮明"]
+    }
+  ];
+
+  for (const category of categoryPatterns) {
+    if (category.patterns.some((pattern) => lower.includes(pattern))) return category.key;
+  }
+
+  return "other";
 }
 
 function calculateEdges(luma, width, height) {
@@ -1337,7 +2156,15 @@ function calculateEntropy(histogram) {
 
 function renderAnalysis(analysis) {
   const metrics = ["brightness", "contrast", "saturation", "edgeDensity", "centerFocus", "symmetry", "textSignal"];
-  els.analysisGrid.innerHTML = metrics
+  const semanticTags = analysis.visibleSemanticTags ?? [];
+  els.analysisGrid.hidden = false;
+  els.analysisGrid.innerHTML =
+    `<div class="metric metric-wide"><span>語意標籤</span><div class="semantic-tags">${
+      semanticTags.length
+        ? semanticTags.map((tag) => `<span class="semantic-tag">${escapeHtml(tag)}</span>`).join("")
+        : "<strong>等待標籤</strong>"
+    }</div></div>` +
+    metrics
     .map((key) => {
       const value = Math.round(analysis.metrics[key] * 100);
       return `<div class="metric"><span>${metricLabels[key]}</span><strong>${value}</strong></div>`;
@@ -1346,81 +2173,70 @@ function renderAnalysis(analysis) {
 }
 
 function renderCard(card) {
+  const statLine = card.cardStatLine ?? deriveCardStatLine(card);
+  const portraitUrl = card.aiPortraitDataUrl ?? card.imageDataUrl;
+  card.cardStatLine = statLine;
+  const xpMax = xpThreshold(card.level);
+  const xpPercent = clamp(Math.round((card.xp / xpMax) * 100), 0, 100);
+  const role = card.combatRole?.role ?? "Battle Role";
+  const skillMarkup = card.skills
+    .slice(0, 2)
+    .map(
+      (skill, index) => `
+        <div class="card-skill">
+          <span>SKILL ${index + 1}</span>
+          <strong>${escapeHtml(skill.name)}</strong>
+          <small>${escapeHtml(skill.text)} 威力 ${skill.power}</small>
+        </div>
+      `
+    )
+    .join("");
   els.cardPreview.classList.remove("empty-card");
   els.cardPreview.style.setProperty("--accent", card.accent);
   els.cardPreview.innerHTML = `
-    <div class="card-art" style="background-image: url('${card.imageDataUrl}')"></div>
+    <div class="card-top-strip">
+      <span class="rarity-emblem">${escapeHtml(card.rarity.key)}</span>
+      <span>${escapeHtml(card.element)}</span>
+      <span>COST ${statLine.cost}</span>
+    </div>
+    <div class="card-art hero-card-art" style="background-image: url('${portraitUrl}')">
+      <span class="element-badge">${escapeHtml(card.className)}</span>
+    </div>
+    <div class="hero-stat-strip">
+      <div>
+        <strong>${statLine.hp}</strong>
+        <span>${cardStatLabels.hp}</span>
+      </div>
+      <div>
+        <strong>${statLine.atk}</strong>
+        <span>${cardStatLabels.atk}</span>
+      </div>
+      <div>
+        <strong>${statLine.def}</strong>
+        <span>${cardStatLabels.def}</span>
+      </div>
+    </div>
     <div class="card-body">
       <div class="card-title-row">
         <div>
-          <p class="card-kicker">Lv.${card.level} / ${card.className} / ${card.element}</p>
+          <p class="card-kicker">Lv.${card.level} / ${escapeHtml(role)}</p>
           <h2>${escapeHtml(card.name)}</h2>
         </div>
-        <span class="rarity-badge">${card.rarity.key}</span>
+        <span class="rarity-badge">${escapeHtml(card.rarity.name)}</span>
       </div>
-      <p class="card-lore">${escapeHtml(card.lore)}</p>
-      <div class="spec-grid">
-        <div>
-          <span>外觀</span>
-          <strong>${escapeHtml(card.appearance?.silhouette ?? "未定義")}</strong>
-        </div>
-        <div>
-          <span>服裝</span>
-          <strong>${escapeHtml(card.appearance?.outfit ?? "未定義")}</strong>
-        </div>
-        <div>
-          <span>性格</span>
-          <strong>${escapeHtml(card.personality?.temperament ?? "未定義")}</strong>
-        </div>
-        <div>
-          <span>定位</span>
-          <strong>${escapeHtml(card.combatRole?.role ?? "未定義")}</strong>
-        </div>
-        <div>
-          <span>年齡印象</span>
-          <strong>${escapeHtml(card.characterSpec?.generationProfile?.ageLabel ?? "未定義")}</strong>
-        </div>
-        <div>
-          <span>現實職業</span>
-          <strong>${escapeHtml(card.characterSpec?.generationProfile?.occupation || "未指定")}</strong>
-        </div>
-        <div>
-          <span>圖像模式</span>
-          <strong>${escapeHtml(card.imageGeneration?.status === "ai_generated" ? "真正 AI" : "本機預覽")}</strong>
-        </div>
-        <div>
-          <span>AI 模型</span>
-          <strong>${escapeHtml(card.imageGeneration?.model ?? "未使用")}</strong>
-        </div>
+      <div class="level-strip">
+        <span>Next Lv ${card.xp}/${xpMax}</span>
+        <div><i style="--xp:${xpPercent}%"></i></div>
       </div>
       ${
         card.imageGeneration?.error
           ? `<p class="ai-warning">${escapeHtml(card.imageGeneration.error)}</p>`
           : ""
       }
-      <div class="retouch-strip">
-        <figure>
-          <img src="${card.aiPortraitDataUrl ?? card.imageDataUrl}" alt="${escapeHtml(card.name)} AI 修飾稿" />
-          <figcaption>AI 修飾稿</figcaption>
-        </figure>
-        <figure>
-          <img src="${card.imageDataUrl}" alt="${escapeHtml(card.name)} 戰鬥卡牌封面" />
-          <figcaption>戰鬥卡牌封面</figcaption>
-        </figure>
-      </div>
-      <div class="stat-list">
-        ${Object.entries(card.stats).map(([key, value]) => statRow(key, value)).join("")}
-      </div>
-      <div class="skill-list">
-        ${card.skills.map((skill) => `<div class="skill"><strong>${escapeHtml(skill.name)}</strong><span>${escapeHtml(skill.text)} 威力 ${skill.power}</span></div>`).join("")}
-      </div>
+      <div class="card-skill-list">${skillMarkup}</div>
       <div class="trait-list">
         ${card.traits.map((trait) => `<span>${escapeHtml(trait)}</span>`).join("")}
       </div>
-      <details class="character-json">
-        <summary>Character Spec JSON</summary>
-        <pre>${escapeHtml(JSON.stringify(card.characterSpec ?? {}, null, 2))}</pre>
-      </details>
     </div>
   `;
 }
@@ -1451,16 +2267,24 @@ function renderDeck() {
 
   els.deckList.innerHTML = state.deck
     .map(
-      (card) => `
-      <div class="deck-card ${card.id === state.selectedCardId ? "selected" : ""}" style="--accent:${card.accent}">
-        <button class="deck-thumb" type="button" data-select="${card.id}" style="background-image:url('${card.imageDataUrl}')" aria-label="選擇 ${escapeHtml(card.name)}"></button>
-        <button class="deck-meta" type="button" data-select="${card.id}">
-          <strong>${escapeHtml(card.name)}</strong>
-          <span>Lv.${card.level} ${card.rarity.key} / ${card.className} / ${card.combatRole?.role ?? "Role"} / XP ${card.xp}</span>
-        </button>
-        <button class="delete-button" type="button" data-delete="${card.id}" aria-label="刪除 ${escapeHtml(card.name)}">刪除</button>
-      </div>
-    `
+      (card) => {
+        const statLine = card.cardStatLine ?? deriveCardStatLine(card);
+        return `
+          <div class="deck-card ${card.id === state.selectedCardId ? "selected" : ""}" style="--accent:${card.accent}">
+            <button class="deck-thumb" type="button" data-select="${card.id}" style="background-image:url('${card.aiPortraitDataUrl ?? card.imageDataUrl}')" aria-label="選擇 ${escapeHtml(card.name)}"></button>
+            <button class="deck-meta" type="button" data-select="${card.id}">
+              <strong>${escapeHtml(card.name)}</strong>
+              <span>Lv.${card.level} ${escapeHtml(card.rarity.key)} / ${escapeHtml(card.className)} / COST ${statLine.cost}</span>
+              <span class="deck-statline">
+                <b>HP ${statLine.hp}</b>
+                <b>ATK ${statLine.atk}</b>
+                <b>DEF ${statLine.def}</b>
+              </span>
+            </button>
+            <button class="delete-button" type="button" data-delete="${card.id}" aria-label="刪除 ${escapeHtml(card.name)}">刪除</button>
+          </div>
+        `;
+      }
     )
     .join("");
 
@@ -1624,6 +2448,10 @@ function gainXp(card, amount) {
       card.stats[key] = clamp(card.stats[key] + 1, 1, 99);
     }
     card.hpBase += 7;
+    card.cardStatLine = deriveCardStatLine(card);
+    if (card.characterSpec) {
+      card.characterSpec.cardStatLine = card.cardStatLine;
+    }
     threshold = xpThreshold(card.level);
     pushLog(`${card.name} 升到 Lv.${card.level}`);
   }
@@ -1638,9 +2466,12 @@ function createEnemyCard(player) {
   const rng = mulberry32(seed);
   const archetype = archetypes[Math.floor(rng() * archetypes.length)];
   const rarity = rarityTable[Math.min(rarityTable.length - 1, Math.floor(player.level / 4) + (rng() > 0.7 ? 1 : 0))];
+  const enemyProfile = createDefaultGenerationProfile();
   const fakeAnalysis = {
     hash: seed,
     textSeed: "",
+    visibleSemanticTags: ["synthetic rival", "training arena"],
+    semanticTagSource: "synthetic_enemy_seed",
     averageColor: { rgb: [40, 48, 58], hex: "#28303a", label: "Ash" },
     palette: [{ rgb: [40, 48, 58], hex: "#28303a", label: "Ash", weight: 1 }],
     metrics: {
@@ -1657,8 +2488,10 @@ function createEnemyCard(player) {
       greenSignal: rng() * 0.45
     }
   };
-  const stats = createStats(fakeAnalysis, archetype, rarity, rng);
+  const stats = createStats(fakeAnalysis, archetype, rarity, rng, enemyProfile);
   const level = Math.max(1, player.level + Math.round(rng() * 2 - 1));
+  const hpBase = 94 + Math.round(stats.guard * 1.55 + level * 8);
+  const skills = createSkills(archetype, stats, [], rng, enemyProfile);
   const card = {
     id: `enemy-${seed}`,
     name: `${pick(["鏡像", "裂隙", "巡迴", "無名"], rng)}${pick(["對手", "獵手", "騎士", "術士"], rng)}`,
@@ -1670,10 +2503,11 @@ function createEnemyCard(player) {
     xp: 0,
     wins: 0,
     losses: 0,
-    hpBase: 94 + Math.round(stats.guard * 1.55 + level * 8),
+    hpBase,
     stats,
-    traits: createTraits(fakeAnalysis, archetype),
-    skills: createSkills(archetype, stats, [], rng),
+    cardStatLine: deriveCardStatLineFromParts({ stats, hpBase, level, rarity, skills }),
+    traits: createTraits(fakeAnalysis, archetype, enemyProfile),
+    skills,
     lore: "",
     imageDataUrl: createEnemyArt(archetype, seed)
   };
@@ -1805,6 +2639,130 @@ function readFileAsDataUrl(file) {
   });
 }
 
+async function waitForCameraFrame(video, options = {}) {
+  const timeoutMs = options.timeoutMs ?? 5000;
+  const deadline = performance.now() + timeoutMs;
+
+  while (performance.now() < deadline) {
+    if (video.videoWidth > 0 && video.videoHeight > 0 && video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
+      await waitForNextVideoFrame(video);
+      return;
+    }
+    await sleep(80);
+  }
+
+  throw new Error("相機畫面尚未準備好，請等畫面出現後再拍攝。");
+}
+
+function waitForNextVideoFrame(video) {
+  return new Promise((resolve) => {
+    if ("requestVideoFrameCallback" in video) {
+      video.requestVideoFrameCallback(() => resolve());
+      return;
+    }
+    requestAnimationFrame(() => requestAnimationFrame(resolve));
+  });
+}
+
+async function captureBestCameraFrame(stream, video) {
+  const candidates = [];
+
+  const photoCapture = await captureTrackPhoto(stream).catch((error) => {
+    console.info("ImageCapture.takePhoto is not available or failed.", error);
+    return null;
+  });
+  if (photoCapture) {
+    if (!isNearBlackImage(photoCapture.visibility)) return photoCapture.dataUrl;
+    candidates.push(photoCapture);
+  }
+
+  const directCapture = await captureTrackFrame(stream).catch((error) => {
+    console.info("ImageCapture.grabFrame is not available or failed.", error);
+    return null;
+  });
+  if (directCapture) {
+    if (!isNearBlackImage(directCapture.visibility)) return directCapture.dataUrl;
+    candidates.push(directCapture);
+  }
+
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    await waitForCameraFrame(video, { timeoutMs: 5000 });
+    const dataUrl = captureVideoFrame(video);
+    const visibility = await measureImageVisibility(dataUrl);
+    candidates.push({ dataUrl, visibility, source: "video-canvas" });
+    if (!isNearBlackImage(visibility)) return dataUrl;
+    await sleep(120);
+  }
+
+  const best = candidates.sort((a, b) => b.visibility.meanLuma - a.visibility.meanLuma)[0];
+  if (best && !isNearBlackImage(best.visibility)) return best.dataUrl;
+
+  console.warn(
+    "Camera capture candidates were near black.",
+    candidates.map((candidate) => ({
+      source: candidate.source,
+      visibility: candidate.visibility
+    }))
+  );
+  throw new Error("拍到的來源照片幾乎全黑，但預覽正常。請再拍一次；若持續發生，先用上傳照片測試。");
+}
+
+async function captureTrackPhoto(stream) {
+  if (!("ImageCapture" in window)) return null;
+  const track = stream.getVideoTracks()[0];
+  if (!track) return null;
+  const imageCapture = new ImageCapture(track);
+  if (typeof imageCapture.takePhoto !== "function") return null;
+  const blob = await imageCapture.takePhoto();
+  const dataUrl = await readBlobAsDataUrl(blob);
+  const visibility = await measureImageVisibility(dataUrl);
+  return { dataUrl, visibility, source: "image-capture-photo" };
+}
+
+async function captureTrackFrame(stream) {
+  if (!("ImageCapture" in window)) return null;
+  const track = stream.getVideoTracks()[0];
+  if (!track) return null;
+  const imageCapture = new ImageCapture(track);
+  const bitmap = await imageCapture.grabFrame();
+  const dataUrl = drawableToJpegDataUrl(bitmap, bitmap.width, bitmap.height);
+  if (typeof bitmap.close === "function") bitmap.close();
+  const visibility = await measureImageVisibility(dataUrl);
+  return { dataUrl, visibility, source: "image-capture-frame" };
+}
+
+function captureVideoFrame(video) {
+  const width = video.videoWidth;
+  const height = video.videoHeight;
+  if (!width || !height) {
+    throw new Error("相機尚未提供有效影像尺寸，請重新拍攝。");
+  }
+
+  return drawableToJpegDataUrl(video, width, height);
+}
+
+function drawableToJpegDataUrl(drawable, width, height) {
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  ctx.drawImage(drawable, 0, 0, canvas.width, canvas.height);
+  return canvas.toDataURL("image/jpeg", 0.82);
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function readBlobAsDataUrl(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
 async function normalizeImage(dataUrl) {
   const image = await loadImage(dataUrl);
   const canvas = document.createElement("canvas");
@@ -1817,6 +2775,21 @@ async function normalizeImage(dataUrl) {
   return canvas.toDataURL("image/jpeg", 0.84);
 }
 
+async function createCenterSubjectCropDataUrl(dataUrl) {
+  const image = await loadImage(dataUrl);
+  const cropWidth = Math.max(1, Math.round(image.width * 0.36));
+  const cropHeight = Math.max(1, Math.round(image.height * 0.78));
+  const sx = Math.max(0, Math.round((image.width - cropWidth) / 2));
+  const sy = Math.max(0, Math.round((image.height - cropHeight) * 0.42));
+  const scale = Math.min(1, 768 / Math.max(cropWidth, cropHeight));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(cropWidth * scale));
+  canvas.height = Math.max(1, Math.round(cropHeight * scale));
+  const ctx = canvas.getContext("2d");
+  ctx.drawImage(image, sx, sy, cropWidth, cropHeight, 0, 0, canvas.width, canvas.height);
+  return canvas.toDataURL("image/jpeg", 0.86);
+}
+
 function loadImage(src) {
   return new Promise((resolve, reject) => {
     const image = new Image();
@@ -1824,6 +2797,56 @@ function loadImage(src) {
     image.onerror = reject;
     image.src = src;
   });
+}
+
+async function assertVisibleImageDataUrl(src) {
+  const visibility = await measureImageVisibility(src);
+  if (isNearBlackImage(visibility)) {
+    throw new Error("ComfyUI 產生近乎全黑圖片，已切回本地預覽。請用 npm run comfy:start 重新啟動後再試。");
+  }
+}
+
+async function assertUsableSourceImageDataUrl(src) {
+  const visibility = await measureImageVisibility(src);
+  if (isNearBlackImage(visibility)) {
+    throw new Error("拍到的來源照片幾乎全黑，請確認相機畫面、光線或改用上傳照片。");
+  }
+}
+
+async function measureImageVisibility(src) {
+  const image = await loadImage(src);
+  return measureDrawableVisibility(image);
+}
+
+function measureDrawableVisibility(drawable) {
+  const canvas = document.createElement("canvas");
+  canvas.width = 64;
+  canvas.height = 64;
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  ctx.drawImage(drawable, 0, 0, canvas.width, canvas.height);
+  const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+  let lumaTotal = 0;
+  let visiblePixels = 0;
+  let opaquePixels = 0;
+
+  for (let index = 0; index < pixels.length; index += 4) {
+    const alpha = pixels[index + 3];
+    if (alpha < 10) continue;
+    opaquePixels += 1;
+    const luma = pixels[index] * 0.2126 + pixels[index + 1] * 0.7152 + pixels[index + 2] * 0.0722;
+    lumaTotal += luma;
+    if (luma > 24) visiblePixels += 1;
+  }
+
+  const sampledPixels = Math.max(1, opaquePixels);
+  return {
+    meanLuma: lumaTotal / sampledPixels,
+    visibleRatio: visiblePixels / sampledPixels
+  };
+}
+
+function isNearBlackImage(visibility) {
+  return visibility.meanLuma < 16 && visibility.visibleRatio < 0.02;
 }
 
 function drawCover(ctx, image, width, height) {

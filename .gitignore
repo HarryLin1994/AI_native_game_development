@@ -6,6 +6,8 @@ dist/
 build/
 coverage/
 .cache/
+.local-tools/
+.local-models/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*

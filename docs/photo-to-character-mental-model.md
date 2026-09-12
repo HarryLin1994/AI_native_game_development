@@ -94,6 +94,7 @@ The canonical generated character. This is the most important output because bat
   "schema": "photo-character-lab.character.v1",
   "source": "real_photo_local_analysis",
   "identityPolicy": "no_identity_recognition",
+  "characterFormBranch": "humanlike",
   "generationProfile": {},
   "name": "A12的焰行者",
   "className": "焰行者",
@@ -144,7 +145,11 @@ Generation Profile + Photo Analysis + Reroll Seed
   -> Character Generator
   -> Character Spec
 
-Source Photo + Character Spec
+Character Spec
+  -> Character Form Branch Router
+  -> Humanlike / Animalized / Objectified branch constraints
+
+Source Photo + Character Spec + Character Form Branch
   -> Visual Generator
   -> Retouched Portrait
   -> Card Cover
@@ -260,23 +265,31 @@ Input:
 {
   sourcePhoto: SourcePhoto;
   character: CharacterSpec;
+  characterFormBranch: CharacterFormBranch;
   mode: "local" | "ai";
 }
 ```
 
 Responsibilities:
 
-- Build the image prompt.
+- Build the image prompt from the selected Character Form Branch.
 - Call the selected visual adapter.
 - Produce Retouched Portrait.
 - Render Card Cover.
 - Report fallback or model errors.
 - Preserve consenting subject likeness while avoiding identity verification claims.
 
+Branch rules:
+
+- `humanlike`: preserve face likeness, source body proportion, plausible human anatomy, clothing/accessory cues, and visible subject cues.
+- `animalized.*`: transfer identity cues into an animal protagonist. Do not render a human with animal ears when the branch says the animal is the main subject.
+- `objectified`: transfer identity cues into a non-living character, artifact, robot, mascot object, weapon, relic, vehicle, or animated item. Do not require human anatomy or direct face likeness.
+
 Adapters:
 
 - Local Canvas adapter.
 - AI Image Edit adapter.
+- ComfyUI adapter.
 
 The seam belongs at `generateVisuals`, not inside UI event handlers.
 

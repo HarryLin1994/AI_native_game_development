@@ -13,8 +13,24 @@ Non-identifying visual information extracted from a Source Photo, such as color,
 _Avoid_: Face data, identity data
 
 **Text Seed**:
-Short text supplied by the player or read from visible text in the Source Photo, used to influence names, traits, or motifs.
+Short text supplied by the player or read from visible text in the Source Photo, such as jersey text, signs, labels, or symbols. It is used to influence names, traits, or motifs.
 _Avoid_: OCR truth, legal name
+
+**Visible Semantic Tag**:
+A visible, non-sensitive scene or action clue suggested from the Source Photo, such as basketball court, athlete, arcade room, formal outfit, sweaty, tired, celebratory, or holding a controller. It is not OCR text.
+_Avoid_: Text Seed, inferred personal fact, hidden profile
+
+**Visible Person Description**:
+A visible, non-sensitive description of the person in the Source Photo, such as hair shape, expression cue, pose, accessory, outfit silhouette, or face visibility. It supports creative likeness and character design without identifying the person or inferring protected traits.
+_Avoid_: Identity recognition, detected age, detected gender, ethnicity, sexuality, health, political belief, personality truth
+
+**Target Subject**:
+The single person or object in the Source Photo that should become the Battle Card character. In the current MVP, this defaults to the centered, largest, or clearest foreground subject. Other visible people remain part of the scene context but must not contribute personal appearance details to the character.
+_Avoid_: All detected people, face identity, crowd-as-character
+
+**World Context**:
+Visible background and environmental signals around the Target Subject, such as place, props, lighting, crowd presence, signs, and activity. It can influence card art atmosphere and mechanics without changing who the character is.
+_Avoid_: Background person identity, unrelated subject traits
 
 **Generation Profile**:
 The player's answers that steer character creation, including age impression, real-world role, visible traits, combat style, and card mood.
@@ -51,6 +67,14 @@ _Avoid_: AI-decided stat, arbitrary output
 **Generation Guardrail**:
 A rule that constrains what models may infer, generate, store, or influence during character creation.
 _Avoid_: Prompt suggestion only
+
+**Question Mapping**:
+The documented link from a questionnaire answer to its allowed data source, Character Spec field, card art prompt hook, stat or skill rule hook, and player-facing explanation.
+_Avoid_: Free-form prompt instruction
+
+**System Pipeline**:
+The ordered product flow that turns consent-based Source Photo input and allowed player context into a Character Spec, Card Cover, Battle Card, progression state, and battle result.
+_Avoid_: Single AI chain, prompt pipeline
 
 **Age Impression**:
 A fictional age band selected as creative direction for the character. It is not a verified age estimate.
@@ -115,6 +139,22 @@ _Avoid_: Verified likeness, face match
 **Identity Preservation**:
 The visual goal of keeping broad likeness and recognizable cues of the consenting photo subject while transforming them into a fictional character.
 _Avoid_: Face recognition, identity verification
+
+**Character Form Branch**:
+The chosen visual transformation route for a generated character, such as humanlike, animalized, or objectified. It decides how Source Photo cues are transferred into the generated character before style and card UI are applied.
+_Avoid_: Git branch, random prompt style, model name
+
+**Humanlike Branch**:
+A Character Form Branch where the Target Subject remains a human or humanlike character. It prioritizes facial likeness, source body proportion, plausible anatomy, and visible personal cues.
+_Avoid_: Photo retouch only, exact identity copy
+
+**Animalized Branch**:
+A Character Form Branch where the Target Subject becomes an animal protagonist, such as a cat or dog. Likeness is transferred through visible cues, accessories, expression character, color, clothing motifs, props, and attitude rather than direct human facial similarity.
+_Avoid_: Human with animal ears, random pet, face swap
+
+**Objectified Branch**:
+A Character Form Branch where the Target Subject becomes a non-living character, artifact, robot, mascot object, weapon, relic, vehicle, or animated item. Likeness is transferred through motifs, silhouette cues, palette, accessories, symbols, props, and personality cues rather than human anatomy.
+_Avoid_: Random object, product mockup, loss of source-photo cues
 
 **Card Cover**:
 The final visual presentation image for a Battle Card.

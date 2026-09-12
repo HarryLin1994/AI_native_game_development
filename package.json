@@ -4,6 +4,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "node server.mjs"
+    "dev": "node server.mjs",
+    "comfy:start": "cd .local-tools/ComfyUI && ../comfy-venv/bin/python main.py --listen 127.0.0.1 --port 8188 --fp32-vae",
+    "comfy:generate-smoke": "node tools/comfy-card-art-smoke.mjs",
+    "comfy:style-compare": "node tools/comfy-style-comparison.mjs",
+    "comfy:status": "node tools/comfy-status.mjs"
   }
 }

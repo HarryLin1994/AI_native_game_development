@@ -20,6 +20,10 @@ This folder holds the project memory for the AI-native card game MVP. Use this p
 
 ## System Design
 
+- [SYSTEM_PIPELINE.md](./SYSTEM_PIPELINE.md)
+  - Top-level product pipeline and model stack from consent and photo intake to Character Spec, card art, save, progression, and battle.
+  - Read this before splitting modules, adding AI adapters, changing storage, or deciding the next implementation step.
+
 - [photo-to-character-mental-model.md](./photo-to-character-mental-model.md)
   - Mental model for `Source Photo -> Photo Analysis -> Character Spec -> Card Cover -> Battle Card`.
   - Read this before changing the photo-to-character pipeline or splitting modules.
@@ -28,6 +32,18 @@ This folder holds the project memory for the AI-native card game MVP. Use this p
   - Local image generation strategy for MacBook Air M3 / 16 GB.
   - Read this before working on ComfyUI, SD1.5, SDXL-Lightning, Draw Things, MFLUX, or image generation adapters.
 
+- [IMAGE_PIPELINE_ACCEPTANCE.md](./IMAGE_PIPELINE_ACCEPTANCE.md)
+  - Current photo-to-card-art focus, non-goals, input boundaries, and visual acceptance gates.
+  - Read this before judging generated images, changing prompts, swapping models, or resuming battle/UI work.
+
+- [ART_DIRECTION.md](./ART_DIRECTION.md)
+  - Current generated-character form branches and style targets, including humanlike, animalized cat/dog, objectified characters, American flat cartoon, neon arcade hero, designer-toy sticker, anatomy gates, and source-proportion locks.
+  - Read this before changing character-art prompts, comparing visual styles, or deciding whether an output is aesthetically usable.
+
+- [comfyui-workflows/README.md](./comfyui-workflows/README.md)
+  - Placeholder contract for exported ComfyUI API workflows.
+  - Read this before saving or wiring a ComfyUI workflow JSON.
+
 ## Product And UX
 
 - [UI_REFERENCE.md](./UI_REFERENCE.md)
@@ -35,7 +51,7 @@ This folder holds the project memory for the AI-native card game MVP. Use this p
   - Read this before changing the generator UI, card library, character detail, or battle screen.
 
 - [CHARACTER_QUESTIONS.md](./CHARACTER_QUESTIONS.md)
-  - Draft questionnaire for consent, role, backstory, values, weakness, signature item, and optional capture context.
+  - Draft questionnaire plus `Question Mapping` for consent, role, backstory, values, weakness, signature item, capture context, card stats, skills, and future flow.
   - Read this before changing the user question form or mapping answers to Character Spec.
 
 - [REFERENCE_GAMES.md](./REFERENCE_GAMES.md)
@@ -59,4 +75,4 @@ This folder holds the project memory for the AI-native card game MVP. Use this p
 
 ## Current Next Discussion
 
-After this README, the next product discussion is the first user-facing questionnaire details. The current draft is in [CHARACTER_QUESTIONS.md](./CHARACTER_QUESTIONS.md), but implementation should wait until the question set is confirmed.
+After this README, the next product focus is validating the photo-to-card-art pipeline through [IMAGE_PIPELINE_ACCEPTANCE.md](./IMAGE_PIPELINE_ACCEPTANCE.md). Enemy data, battle tuning, progression, and final UI animation should wait until one generated visual target passes the image acceptance gates.

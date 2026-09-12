@@ -35,6 +35,23 @@ Core guardrails:
 - Do not let free-text answers become arbitrary stat boosts without capped mapping rules.
 - Card Stat Line must come from allowed inputs plus rule tables, not from raw AI guesses.
 
+## Question Mapping Contract
+
+Every question that survives into the product must have a clear `Question Mapping`.
+
+Required mapping for each question:
+
+- Player-facing question text.
+- Whether the answer is required, recommended, optional, or future-only.
+- Source of truth: User-Declared Field, confirmed Model-Suggested Field, Rule-Derived Field, or Default Generation Template.
+- Whether OCR / Vision can suggest a value.
+- Which `Character Spec` field it writes to.
+- Which card-art prompt hooks it creates.
+- Which stat, trait, skill, progression, or battle hooks it may affect.
+- Player-facing explanation text for why the card received that result.
+
+比喻：每題都要像電線一樣接到一個插座。沒有接到卡面、數值、技能、養成或說明的題目，就先不要放進 MVP。
+
 ## Field Source Matrix
 
 | Field | Meaning | Source of truth | Can model suggest it? | Can it affect mechanics? | First rule |
@@ -162,6 +179,70 @@ Guardrails:
 - Rarity and stats must not be framed as judging the real person.
 - AI image output cannot retroactively change stats.
 - Every visible stat should be explainable from the accepted inputs.
+
+## Detailed Question Blueprint
+
+This is the working blueprint for the first questionnaire. It is not final UI copy yet.
+
+| Question area | MVP priority | Source of truth | Model role | Character Spec output | Card / battle output |
+|---|---|---|---|---|---|
+| Consent | Required | User only | None | `consent` | Gates generation and storage |
+| Age Impression | Basic | User | None in MVP | `generationProfile.ageImpression` | Growth flavor, small stat flavor, level cap flavor |
+| Real-World Role | Basic | User | May suggest examples only if asked | `generationProfile.realWorldRole` | Archetype, trait names, one skill word, art motif |
+| Visible Traits | Basic | User-confirmed | Suggest visible non-sensitive details | `generationProfile.visibleTraits` | Prompt details, small stat modifiers, trait tags |
+| Combat Style | Basic | User or `auto` rules | None | `generationProfile.combatStyle` | Primary internal stat, Combat Role, first skill template |
+| Card Mood | Basic | User or default | None | `generationProfile.cardMood` | Card art style, frame mood, visual effects |
+| Background Story | Recommended | User or default draft | Draft only when user asks | `userSuppliedContext.backstory` | Title, trait flavor, skill name, future dialogue hook |
+| Values | Recommended | User or default | None | `userSuppliedContext.values` | Skill family, support/offense/defense/control/growth bias |
+| Weakness / Cost | Recommended | User or neutral default | Draft only when user asks | `userSuppliedContext.weakness` | Tradeoff, cooldown, risk/reward, counterplay |
+| Signature Item | Recommended | User-confirmed | Suggest only if visible or OCR-supported | `userSuppliedContext.signatureItem` | Visual prop, passive skill name, card icon |
+| Place Type | Optional | User or confirmed scene suggestion | Suggest non-sensitive scene label | `captureContext.placeType` | Element bias, origin title, stage flavor |
+| Time / Mood | Optional | User or confirmed lighting suggestion | Suggest lighting/mood label | `captureContext.timeMood` | Visual atmosphere, element bias, first-turn flavor |
+| Sensitive Creative Context | Future-only | User only with explicit consent | Never infer | `sensitiveCreativeContext` | Later: motifs, team synergy, narrative unlocks |
+
+First UX rule:
+
+- Basic questions should fit on one clear screen after photo upload.
+- Recommended questions can be shown as an "advanced flavor" section.
+- Optional Capture Context should be manual and coarse in MVP.
+- Sensitive Creative Context should stay out of the first UI until consent and storage rules are designed.
+- Model suggestions should appear as editable chips, not hidden decisions.
+
+比喻：問卷像角色創建器的「快速模式 + 進階模式」。快速模式能立刻開卡；進階模式讓角色更有故事，但不能卡住玩家。
+
+## First Stat And Skill Imagination
+
+These are design hooks, not final balance formulas.
+
+| Input | Normalized direction | Internal stat bias | Visible stat effect | Skill / trait imagination |
+|---|---|---|---|---|
+| 攻擊壓制 | `striker` | `power`, `speed` | Higher `ATK`, higher `COST` if skill is strong | Burst attack, combo finisher |
+| 速度連擊 | `duelist` | `speed`, `luck` | Medium `ATK`, lower `DEF`, extra action chance | Multi-hit, dodge, quick draw |
+| 防禦守護 | `guardian` | `guard`, `focus` | Higher `HP` and `DEF` | Shield, taunt, ally protection |
+| 控制干擾 | `controller` | `focus`, `speed` | Medium stats, higher skill complexity | Delay, lock, debuff, prediction |
+| 幸運奇襲 | `trickster` | `luck`, `speed` | Swingy `ATK`, lower consistency | Crit, steal tempo, random bonus |
+| 自動判定 | `balanced` or rule-derived | Based on accepted photo/user tags | Balanced line | Rules choose one safe template |
+
+Values can steer skill family:
+
+| Value | Rule direction | Possible mechanics |
+|---|---|---|
+| 友情 | Support | Heal ally, shared shield, team combo |
+| 自由 | Mobility | Dodge, reposition, escape debuff |
+| 秩序 | Control | Stun, lock, cleanse chaos effects |
+| 勝利 | Offense | Execute, bonus damage after setup |
+| 知識 | Analysis | Reveal intent, weaken enemy, improve accuracy |
+| 守護 | Defense | Barrier, counter, damage reduction |
+| growth / default | Progression | Extra XP, stable balanced stats |
+
+Weakness should create a playable tradeoff:
+
+- `過度分析`: higher focus, but first attack may be slower.
+- `容易衝動`: higher opening ATK, but lower DEF for one turn.
+- `害怕失去隊友`: stronger support when ally is damaged, but weaker alone.
+- `消耗很大`: powerful skill with cooldown or higher COST.
+
+比喻：弱點不是扣分，而是角色的「打法代價」。像重裝戰士很硬但慢，刺客很快但脆，這樣戰鬥才有選擇。
 
 ## Form Structure
 
@@ -391,21 +472,62 @@ night + street + neon
   -> battle modifier: first-turn speed bonus
 ```
 
+## Future Product Imagination
+
+The questionnaire should eventually become a guided character-generation flow, not a static form.
+
+### Phase 1: Local MVP
+
+- User uploads a Source Photo.
+- User answers the basic and recommended questions manually.
+- Rules create a deterministic Character Spec.
+- Card Stat Line, Traits, Skills, and Card Cover are generated from that Character Spec.
+- Save only what is needed for the Battle Card; source-photo retention needs explicit opt-in.
+
+### Phase 2: Confirmed Model Suggestions
+
+- OCR / Vision suggests visible traits, colors, OCR text, place type, and lighting mood.
+- User confirms or edits those suggestions before they affect mechanics.
+- The UI shows a short explanation such as: `你確認了「霓虹夜晚」與「筆電」，因此角色獲得資料/電系傾向。`
+
+### Phase 3: Card Art Adapter
+
+- Character Spec becomes the single source for card art prompt generation.
+- Source Photo guides likeness and pose.
+- User answers guide costume, element, aura, background, props, and mood.
+- Generated art cannot change stats after the fact.
+
+### Phase 4: Progression And Memory
+
+- Walking, conversations, battle results, or repeated captures can add XP and unlock memories.
+- Values and weaknesses can decide progression quests.
+- Capture Context can become a "memory stamp", such as `Night Street Origin`, without needing exact GPS.
+
+### Phase 5: Battle System Integration
+
+- Each Battle Card has active skills, passive traits, `HP / ATK / DEF / COST / Level`, and internal stats.
+- Future deck or team rules can use `COST` to prevent one team from stacking only high-power cards.
+- Card effects should be data-driven so the battle engine resolves them in a consistent order.
+- UI should support Hearthstone-like card movement later: hover lift, drag, target glow, snapback, impact flash, and damage numbers.
+
 ## MVP Question Set
 
 First implementation should only add a small advanced section, not the full long form.
 
-Add these fields first:
+First pass implementation status: the fields were prototyped, then moved out of the main generator UI after review. The main screen should stay card-first. For now these fields exist as hidden/default generation inputs until a separate setup or review flow is designed.
 
-1. 照片人物同意
-2. 背景故事一句話
-3. 最重視什麼
-4. 弱點或代價
-5. 招牌物品
-6. 場所類型
-7. 時間 / 氣氛
+Prototype/default fields:
 
-Do not add sensitive creative context to the UI until consent copy and storage behavior are clearer.
+1. 背景故事一句話
+2. 最重視什麼
+3. 弱點或代價
+4. 招牌物品
+5. 場所類型
+6. 時間 / 氣氛
+
+Consent should be handled at game entry / onboarding, not inside the card generator screen.
+
+Do not add sensitive creative context to the UI until consent copy, storage behavior, and the separate setup flow are clearer.
 
 ## Open Questions
 

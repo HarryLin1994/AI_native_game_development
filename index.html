@@ -13,7 +13,7 @@
           <p class="eyebrow">Local MVP</p>
           <h1>Photo Character Lab</h1>
         </div>
-        <div class="topbar-status" id="privacyStatus">本機分析中，照片不會上傳</div>
+        <div class="topbar-status" id="privacyStatus">本機卡牌生成</div>
       </header>
 
       <main class="workspace">
@@ -21,7 +21,7 @@
           <div class="panel-heading">
             <div>
               <p class="eyebrow">Photo Input</p>
-              <h2 id="captureTitle">人物生成素材</h2>
+              <h2 id="captureTitle">卡牌生成</h2>
             </div>
             <span class="pill" id="analysisState">等待素材</span>
           </div>
@@ -42,89 +42,74 @@
             </label>
             <button id="cameraButton" type="button">開啟相機</button>
             <button id="captureButton" type="button" disabled>拍攝</button>
-            <button id="summonButton" type="button" disabled>生成人物</button>
+            <button id="visionTagsButton" type="button" disabled>VLM 解析</button>
+            <button id="summonButton" type="button" disabled>生成卡牌</button>
           </div>
 
-          <label class="field">
-            <span>OCR 文字種子</span>
-            <input id="sigilInput" type="text" maxlength="42" placeholder="衣服、名牌、招牌上的字" />
-          </label>
-
-          <div class="question-panel">
-            <label class="field">
-              <span>年齡印象</span>
-              <select id="ageInput">
-                <option value="young_adult">青年</option>
-                <option value="teen">少年</option>
-                <option value="adult">成年</option>
-                <option value="veteran">資深</option>
-                <option value="legend">傳奇</option>
-              </select>
-            </label>
-
-            <label class="field">
-              <span>現實職業 / 身份</span>
-              <input id="occupationInput" type="text" maxlength="36" placeholder="工程師、學生、設計師、醫師" />
-            </label>
-
-            <label class="field wide-field">
-              <span>人物特徵</span>
-              <textarea id="featureInput" maxlength="96" rows="3" placeholder="眼鏡、短髮、冷靜、運動感、黑色外套"></textarea>
-            </label>
-
-            <label class="field">
-              <span>戰鬥風格</span>
-              <select id="combatStyleInput">
-                <option value="auto">自動判定</option>
-                <option value="striker">攻擊壓制</option>
-                <option value="duelist">速度連擊</option>
-                <option value="guardian">防禦守護</option>
-                <option value="controller">控制干擾</option>
-                <option value="trickster">幸運奇襲</option>
-              </select>
-            </label>
-
-            <label class="field">
-              <span>卡面氣質</span>
-              <select id="cardMoodInput">
-                <option value="cinematic">電影感</option>
-                <option value="neon">霓虹科技</option>
-                <option value="arcane">祕法幻想</option>
-                <option value="street">街頭英雄</option>
-                <option value="royal">史詩王者</option>
-              </select>
-            </label>
-
-            <label class="field wide-field">
-              <span>圖像生成模式</span>
-              <select id="imageModeInput">
-                <option value="ai">真正 AI 修飾，需要 OPENAI_API_KEY</option>
-                <option value="local">本機預覽，不呼叫 AI</option>
-              </select>
+          <div class="semantic-review">
+            <label class="field semantic-field">
+              <span>VLM 語意候選</span>
+              <textarea
+                id="semanticTagsInput"
+                maxlength="180"
+                placeholder="VLM 下一步自動產生；目前可校準：basketball court, athlete, post-game energy"
+              ></textarea>
             </label>
           </div>
 
-          <div class="analysis-grid" id="analysisGrid"></div>
+          <div hidden>
+            <input id="sigilInput" type="text" maxlength="42" value="" />
+            <select id="ageInput">
+              <option value="young_adult" selected>青年</option>
+            </select>
+            <input id="occupationInput" type="text" maxlength="36" value="" />
+            <textarea id="featureInput" maxlength="96"></textarea>
+            <select id="combatStyleInput">
+              <option value="auto" selected>自動判定</option>
+            </select>
+            <select id="cardMoodInput">
+              <option value="cinematic" selected>電影感</option>
+            </select>
+            <select id="imageModeInput">
+              <option value="local" selected>本機預覽，不呼叫 AI</option>
+              <option value="comfy">本機 ComfyUI 生圖</option>
+              <option value="ai">外部 OpenAI 圖片修飾</option>
+            </select>
+            <textarea id="backstoryInput" maxlength="120"></textarea>
+            <select id="valueInput">
+              <option value="growth" selected>成長</option>
+            </select>
+            <input id="signatureItemInput" type="text" maxlength="36" value="" />
+            <input id="weaknessInput" type="text" maxlength="80" value="" />
+            <select id="placeTypeInput">
+              <option value="neutral" selected>中性訓練場</option>
+            </select>
+            <select id="timeMoodInput">
+              <option value="clear" selected>清晰日常</option>
+            </select>
+          </div>
+
+          <div class="analysis-grid" id="analysisGrid" hidden></div>
         </section>
 
-        <section class="card-stage" aria-label="生成角色">
+        <section class="card-stage" aria-label="生成卡牌">
           <article class="game-card empty-card" id="cardPreview">
             <div class="card-art placeholder-art"></div>
             <div class="card-body">
               <div class="card-title-row">
                 <div>
-                  <p class="card-kicker">Character Spec</p>
+                  <p class="card-kicker">Battle Card</p>
                   <h2>尚未生成</h2>
                 </div>
                 <span class="rarity-badge">N</span>
               </div>
-              <p class="card-lore">選擇真實照片後，角色設定與視覺稿會在這裡成形。</p>
+              <p class="card-lore">選擇照片後，戰鬥卡牌會在這裡成形。</p>
             </div>
           </article>
 
           <div class="card-actions">
-            <button id="saveCardButton" type="button" disabled>保存角色</button>
-            <button id="rerollButton" type="button" disabled>重鑄角色</button>
+            <button id="saveCardButton" type="button" disabled>保存卡牌</button>
+            <button id="rerollButton" type="button" disabled>重鑄卡牌</button>
           </div>
         </section>
 
@@ -132,7 +117,7 @@
           <div class="panel-heading">
             <div>
               <p class="eyebrow">Battle Test</p>
-              <h2 id="battleTitle">角色戰鬥測試</h2>
+              <h2 id="battleTitle">卡牌戰鬥測試</h2>
             </div>
             <span class="pill" id="battleState">未開戰</span>
           </div>
@@ -167,8 +152,8 @@
         <section class="tool-panel deck-panel" aria-labelledby="deckTitle">
           <div class="panel-heading">
             <div>
-              <p class="eyebrow">Characters</p>
-              <h2 id="deckTitle">本機角色庫</h2>
+              <p class="eyebrow">Cards</p>
+              <h2 id="deckTitle">本機卡牌庫</h2>
             </div>
             <span class="pill" id="deckCount">0 張</span>
           </div>
