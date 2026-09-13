@@ -128,7 +128,9 @@ MVP 的目標路線是：優先研究並接上本機 Picture generation；如果
 
 更完整的本地圖片生成研究記錄在 [LOCAL_IMAGE_GENERATION.md](./LOCAL_IMAGE_GENERATION.md)。
 
-目前狀態：專案已加入 ComfyUI 本機連線檢查與 `/api/comfy-card-art` adapter。這台 Mac Air 已可啟動本機 ComfyUI，使用 MPS 裝置，並已用 `docs/comfyui-workflows/sdxl-turbo-img2img-api.json` 和 SDXL Turbo checkpoint 成功產出 768x1024 PNG smoke image。該 plain img2img baseline 與原圖差異太大，已明確拒絕作為本人相似度或美術品質基準，只保留為 adapter smoke test；`docs/comfyui-workflows/sdxl-turbo-faceid-img2img-api.json` 已接上 IP-Adapter FaceID 並成功產出有效 PNG，相似度比 rejected baseline 好，但目前仍太像照片修飾，不像最終戰鬥卡圖。新的 likeness 目標是「能大幅改變年代、服裝、場景與風格，但臉部身份仍像同一個人」，因此下一步先測 `docs/comfyui-workflows/sdxl-turbo-faceid-txt2img-api.json`：保留 FaceID conditioning，但從空白 latent 生成，而不是拿原圖當 img2img 底稿。若仍不達標，再改測更強的美術 checkpoint、SDXL Lightning-compatible checkpoint、style LoRA，或更強的 identity-preserving workflow。Workflow placeholder 規格記錄在 [comfyui-workflows/README.md](./comfyui-workflows/README.md)。這仍是技術驗證，不是最終美術方向。
+目前狀態：專案已加入 ComfyUI 本機連線檢查與 `/api/comfy-card-art` adapter。這台 Mac Air 已可啟動本機 ComfyUI，使用 MPS 裝置，並已用 `docs/comfyui-workflows/sdxl-turbo-img2img-api.json` 和 SDXL Turbo checkpoint 成功產出 768x1024 PNG smoke image。該 plain img2img baseline 與原圖差異太大，已明確拒絕作為本人相似度或美術品質基準，只保留為 adapter smoke test；`docs/comfyui-workflows/sdxl-turbo-faceid-img2img-api.json` 已接上 IP-Adapter FaceID 並成功產出有效 PNG，相似度比 rejected baseline 好，但目前仍太像照片修飾，不像最終戰鬥卡圖。`docs/comfyui-workflows/sdxl-turbo-faceid-txt2img-api.json` 有較強美術化潛力，但肢體與手部不穩。結論是：SDXL Turbo / FaceID 路線只保留為歷史 baseline，不再作為最高優先調參方向。
+
+新的最高優先本地生圖實驗改為 `Flux Kontext GGUF`：主模型優先測 `FLUX.1-Kontext-dev-GGUF Q4_K_M`，文字模型優先測 `t5-v1_1-xxl-encoder Q4_K_M`，再搭配 Flux 所需的 `CLIP-L` 與 `AE/VAE`。選它的原因是 Kontext 是 image-to-image / editing 類型，語意上更接近本遊戲「從真實照片保留本人特徵並重做角色圖」的核心需求。這條路線目前只作本地研究，因為 Flux dev / Kontext dev 授權是 non-commercial。Workflow placeholder 規格記錄在 [comfyui-workflows/README.md](./comfyui-workflows/README.md)。這仍是技術驗證，不是最終美術方向。
 
 目前開發焦點收斂為圖片生成 pipeline 與效果驗收：
 
@@ -144,7 +146,7 @@ Source Photo
 
 敵人資料、戰鬥系統、養成、Deck balance 先暫停。等一張本地生成圖通過 [IMAGE_PIPELINE_ACCEPTANCE.md](./IMAGE_PIPELINE_ACCEPTANCE.md) 的 likeness、照片語意、乾淨角色圖層與卡圖潛力驗收後，再恢復下游玩法。
 
-目前順序：先把 `Visible Semantic Tags` 做到 VLM 可產生、可人工確認、可分組、可進 prompt 的高階滿意版本，再更換或調整 SDXL Turbo / SDXL-Lightning / stylized checkpoint。人工輸入只作為 VLM adapter 完成前的校準與覆寫，不是最終玩家流程。原因是如果照片語意輸入不穩，換模型後也無法判斷失敗原因。
+目前順序：先把 `Visible Semantic Tags` 做到 VLM 可產生、可人工確認、可分組、可進 prompt 的高階滿意版本，並把圖片生成最高優先實驗切到 `Flux Kontext GGUF`。人工輸入只作為 VLM adapter 完成前的校準與覆寫，不是最終玩家流程。原因是如果照片語意輸入不穩，換模型後也無法判斷失敗原因。
 
 ## UI 方向
 

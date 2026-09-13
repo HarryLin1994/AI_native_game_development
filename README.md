@@ -5,7 +5,7 @@
 目前圖像路線：
 
 - 本機預覽：不需要 API Key，所有圖片處理都在瀏覽器用 Canvas 完成。
-- ComfyUI 本機 AI 生圖：正式本地研究方向，目前先提供連線 smoke test。
+- ComfyUI 本機 AI 生圖：正式本地研究方向。SDXL Turbo / FaceID 已降為歷史 baseline；下一個最高優先實驗是 Flux Kontext GGUF。
 - 外部 OpenAI 修飾：舊測試路線，需要 `OPENAI_API_KEY`，照片會送到 OpenAI Image Edit API。
 
 ## Run
@@ -72,6 +72,8 @@ npm run comfy:start
 ```
 
 On this Mac, the script starts ComfyUI with `--fp32-vae` to avoid near-black SDXL Turbo outputs on Apple MPS.
+
+Current local image-generation research priority is recorded in [docs/LOCAL_IMAGE_GENERATION.md](docs/LOCAL_IMAGE_GENERATION.md). As of the latest direction, the next serious experiment is `FLUX.1-Kontext-dev-GGUF Q4_K_M` plus `t5-v1_1-xxl-encoder Q4_K_M`, but the model download should wait until there is enough free disk space.
 
 Then check:
 
@@ -166,7 +168,7 @@ To enable it:
 
 1. Start ComfyUI.
 2. Download the model named by the workflow.
-3. Use the included first workflow at `docs/comfyui-workflows/sdxl-turbo-img2img-api.json`, or export a new API workflow JSON.
+3. Use one of the research workflows under `docs/comfyui-workflows/`, or export a new API workflow JSON.
 4. Set `COMFYUI_WORKFLOW_PATH` in `.env.local`.
 5. Open the MVP with `?imageMode=comfy`, for example:
 
@@ -189,7 +191,7 @@ __HEIGHT__
 
 If ComfyUI is not running, the workflow is missing, generation fails, or ComfyUI returns a near-black image, the browser falls back to the local Canvas card preview.
 
-Current first smoke workflow:
+Historical first smoke workflow:
 
 ```text
 docs/comfyui-workflows/sdxl-turbo-img2img-api.json
@@ -201,7 +203,7 @@ It expects this checkpoint in ComfyUI:
 .local-tools/ComfyUI/models/checkpoints/sd_xl_turbo_1.0_fp16.safetensors
 ```
 
-SDXL Turbo is being used as a local research/smoke-test model. Re-check its license before any commercial release.
+SDXL Turbo is retained as a local research/smoke-test baseline. Current quality research has moved toward Flux Kontext GGUF because SDXL Turbo / FaceID did not satisfy the project's likeness-plus-remake goal. Re-check every model license before any commercial release.
 
 Observed on this Mac Air:
 
@@ -226,7 +228,8 @@ Output: 768x1024 PNG
 - True AI retouched portrait through the local Node proxy when `OPENAI_API_KEY` is configured.
 - ComfyUI status check endpoint at `/api/comfy-status`.
 - ComfyUI card-art endpoint at `/api/comfy-card-art`, gated by `COMFYUI_WORKFLOW_PATH`.
-- FaceID-conditioned ComfyUI workflows under `docs/comfyui-workflows/` for likeness tests. The current local test target is `sdxl-turbo-faceid-txt2img-api.json`, which uses the upload as an identity reference instead of an img2img canvas.
+- FaceID-conditioned ComfyUI workflows under `docs/comfyui-workflows/` for historical likeness tests.
+- ComfyUI-GGUF installed under `.local-tools/ComfyUI/custom_nodes/ComfyUI-GGUF` for the next Flux Kontext GGUF experiment.
 - Local Canvas preview fallback when AI is not configured.
 - Battle card cover generated locally with Canvas.
 - Local character library saved in `localStorage`.

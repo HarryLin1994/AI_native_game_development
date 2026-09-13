@@ -13,19 +13,20 @@ const prompt = process.env.COMFY_SMOKE_PROMPT || [
   "ROLE/PURPOSE: production character portrait art layer for game UI composition; the card frame and text will be rendered separately by the app",
   "SUBJECT: one target subject only, the same consenting person from the source photo, remade as an arcade game character challenger",
   "ANATOMY LOCK: preserve the source photo's believable human pose structure; natural hand placement, natural wrist angles, normal shoulder and neck connection, no extra limbs, no duplicated hands",
+  "HAND LOCK: if hands are visible, keep them simple, natural, lower-frame, and five-fingered; use a simple controller grip; avoid complex finger poses or raised hands",
   "SOURCE PROPORTION LOCK: preserve believable head size relative to torso, shoulder width, neck length, arm scale, hand scale, and face proportion map from the source photo",
   "IDENTITY LOCK: preserve recognizable facial likeness from the source reference: face shape, jaw impression, eye and brow spacing, nose and mouth proportions, expression character",
   "TARGET SUBJECT VISIBLE CUES: appearance [visible face, playful expression, curly medium-brown hair, white headband, headphones around neck]; clothing [striped sleeveless jersey, retro sporty outfit]; props [handheld game controller]",
-  "WORLD CONTEXT FROM PHOTO: scene [1980s arcade room, neon room]; objects [arcade machines, neon cabinet shapes]; lighting [dark indoor room with saturated neon lighting]; visual signal [retro party energy]",
-  "SCENE REMAKE: use the world context as inspiration, not as a literal photo trace; transform the subject into a new humanlike arcade challenger portrait",
+  "WORLD CONTEXT FROM PHOTO: scene [1980s arcade room, neon room]; objects [arcade machines, abstract neon panels, unlettered cabinet shapes]; lighting [dark indoor room with saturated neon lighting]; visual signal [retro party energy]",
+  "SCENE REMAKE: use the world context as inspiration, not as a literal photo trace; transform the subject into a new humanlike arcade challenger portrait; use abstract neon shapes instead of readable signs",
   "ART DIRECTION: neon arcade game-character portrait, high-contrast anime-real illustration, heroic upper-body crop, clean readable silhouette, sharp focal face, controlled detail density, dramatic rim light",
-  "TECHNICAL OUTPUT: full-bleed 768x1024 portrait art layer, no card frame, no UI, no text, no stat panel, no logo, no watermark",
+  "TECHNICAL OUTPUT: full-bleed 768x1024 portrait art layer, no card frame, no UI, no text, no readable signage, no stat panel, no logo, no watermark",
   "COMPOSITION LOCK: single foreground character, centered face and torso, dynamic but readable pose, background supports the subject, do not draw a trading card, do not draw a card border, no extra foreground people",
   "MODEL GUIDANCE: prioritize face likeness and believable human anatomy over style change; keep face recognizable; avoid over-transforming the body"
 ].join("\n");
 const negativePrompt =
   process.env.COMFY_SMOKE_NEGATIVE_PROMPT ||
-  "text, letters, caption, logo, watermark, signature, card frame, trading card, card border, decorative frame, tarot frame, ornate border, UI border, stat panel, nameplate, label, title text, text banner, gibberish text, extra foreground person, second main character, duplicate person, crowd in foreground, different face, face swap, identity document, distorted face, asymmetrical eyes, bad anatomy, deformed hands, mutated fingers, extra hand, extra arm, extra fingers, missing fingers, twisted arm, broken wrist, dislocated shoulder, unnatural neck, warped torso, cropped head, low quality, blurry face, raw camera snapshot, plain photo retouch, landscape-only image";
+  "text, letters, caption, logo, watermark, signature, readable signage, fake signage, signboard text, poster text, marquee text, letters on background screens, card frame, trading card, card border, decorative frame, tarot frame, ornate border, UI border, stat panel, nameplate, label, title text, text banner, gibberish text, extra foreground person, second main character, duplicate person, crowd in foreground, unrecognizable face, unrelated face, face swap, different person, identity document, distorted face, asymmetrical eyes, bad anatomy, deformed hands, mutated fingers, extra hand, extra arm, extra fingers, missing fingers, twisted arm, broken wrist, dislocated shoulder, unnatural neck, warped torso, cropped head, low quality, blurry face, raw camera snapshot, plain photo retouch, landscape-only image";
 
 if (!sourcePath) {
   console.error("Usage: node tools/comfy-card-art-smoke.mjs /path/to/source-image");

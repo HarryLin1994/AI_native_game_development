@@ -410,6 +410,88 @@ Next real upgrade:
 
 Do not spend another cycle only increasing denoise or rewriting prompts for this workflow. The remaining failures are workflow/model-control limits.
 
+### Flux Kontext GGUF Pivot on 2026-09-13
+
+Decision:
+
+```text
+SDXL Turbo / FaceID remains a historical baseline.
+The next highest-priority local experiment is Flux Kontext GGUF.
+```
+
+Why:
+
+- The current SDXL Turbo + FaceID path can improve likeness, but it still behaves like photo retouching or unstable txt2img.
+- The game needs `photo + semantic tags + user context -> remade character art`, not a lightly edited photo.
+- `FLUX.1-Kontext-dev` is an image-to-image / editing model family, so it better matches the project's source-photo-to-character-art problem.
+- GGUF quantization is a practical fit for this Mac Air because it lowers model storage and memory pressure compared with full precision Flux.
+
+Primary research target:
+
+```text
+Main model:
+  QuantStack/FLUX.1-Kontext-dev-GGUF
+  flux1-kontext-dev-Q4_K_M.gguf
+  size: about 6.9 GB
+  license: flux-1-dev-non-commercial-license
+
+Text encoder:
+  city96/t5-v1_1-xxl-encoder-gguf
+  t5-v1_1-xxl-encoder-Q4_K_M.gguf
+  size: about 2.9 GB
+  license: Apache 2.0
+
+Additional Flux components:
+  CLIP-L text encoder
+  AE/VAE
+```
+
+Installed local support:
+
+```text
+.local-tools/ComfyUI/custom_nodes/ComfyUI-GGUF
+.local-tools/comfy-venv: gguf dependency installed
+```
+
+Space warning:
+
+```text
+Current free disk during pivot: about 15 GB.
+New Flux Kontext Q4_K_M experiment needs about 10.4 GB before runtime cache/swap.
+Do not download the full set while only 15 GB is free.
+```
+
+Recommended cleanup before download:
+
+```text
+If SDXL is no longer needed, delete the old SDXL local research models:
+  .local-tools/ComfyUI/models/checkpoints/sd_xl_turbo_1.0_fp16.safetensors  about 6.5 GB
+  .local-tools/ComfyUI/models/clip_vision/CLIP-ViT-H-14-laion2B-s32B-b79K.safetensors  about 2.4 GB
+  .local-tools/ComfyUI/models/ipadapter/ip-adapter-faceid-plusv2_sdxl.bin  about 1.4 GB
+  .local-tools/ComfyUI/models/loras/ip-adapter-faceid-plusv2_sdxl_lora.safetensors  about 368 MB
+```
+
+These files should not be deleted automatically without an explicit user decision because they are the current reproducible SDXL/FaceID baseline.
+
+Next workflow target:
+
+```text
+Source Photo
+  -> VLM Visible Semantic Tags
+  -> User context fields
+  -> Flux Kontext image-to-image workflow
+  -> Character art layer
+  -> App-rendered card frame and stats
+```
+
+Acceptance for the first Flux Kontext smoke test:
+
+- The result must keep recognizable facial identity better than SDXL txt2img.
+- The result must remake the scene and role more strongly than SDXL FaceID img2img.
+- The result must avoid fake card borders, fake UI panels, and readable nonsense text.
+- Human anatomy must remain believable at card scale.
+- The output can be slow; quality is more important than speed for this experiment.
+
 ## Model Capability Boundary
 
 Prompt wording can improve:

@@ -839,15 +839,16 @@ function createHumanlikeImagePrompt(context) {
     "ROLE/PURPOSE: production character portrait art layer for game UI composition; the card frame and text will be rendered separately by the app",
     `SUBJECT: one target subject only, the same consenting person from the source photo, remade as ${title}, a ${archetype.element} ${archetype.name} game character`,
     "ANATOMY LOCK: preserve the source photo's believable human pose structure; natural hand placement, natural wrist angles, normal shoulder and neck connection, no extra limbs, no duplicated hands",
+    "HAND LOCK: if hands are visible, keep them simple, natural, lower-frame, and five-fingered; avoid complex finger poses or raised hands",
     "SOURCE PROPORTION LOCK: preserve believable head size relative to torso, shoulder width, neck length, arm scale, hand scale, and face proportion map from the source photo",
     `IDENTITY LOCK: preserve recognizable facial likeness from the source reference: face shape, jaw impression, eye and brow spacing, nose and mouth proportions, expression character`,
     `TARGET SUBJECT VISIBLE CUES: ${promptTags.subject}`,
     `CHARACTER SPEC: age direction ${generationProfile.ageLabel}; role ${generationProfile.occupation || "unspecified"}; values ${generationProfile.valueLabel}; traits ${feature}; artifact ${signatureItem}; tradeoff ${weakness}`,
     `WORLD CONTEXT FROM PHOTO: ${promptTags.world}`,
-    `SCENE REMAKE: use the world context as inspiration, not as a literal photo trace; setting seed ${setting}; story seed ${backstory}`,
+    `SCENE REMAKE: use the world context as inspiration, not as a literal photo trace; use abstract neon shapes and unlettered environment panels instead of readable signs; setting seed ${setting}; story seed ${backstory}`,
     `ART DIRECTION: ${modelFit.style}, high-contrast anime-real game character illustration, heroic upper-body crop, clean readable silhouette, sharp focal face, controlled detail density, dramatic rim light, energy accent ${archetype.accent}`,
     `PALETTE: ${palette}`,
-    `TECHNICAL OUTPUT: full-bleed 768x1024 portrait art layer, no card frame, no UI, no text, no stat panel, no logo, no watermark`,
+    `TECHNICAL OUTPUT: full-bleed 768x1024 portrait art layer, no card frame, no UI, no text, no readable signage, no stat panel, no logo, no watermark`,
     "COMPOSITION LOCK: single foreground character, centered face and torso, dynamic but readable pose, background supports the subject, do not draw a trading card, do not draw a card border, no extra foreground people",
     `OUTFIT/PROP DIRECTION: ${appearance.outfit}; ${signatureItem}; keep target-subject clothing cues when visible`,
     "MODEL GUIDANCE: prioritize face likeness and believable human anatomy over style change; keep face recognizable; avoid over-transforming the body"
@@ -1021,7 +1022,7 @@ function createCardArtNegativePrompt(characterFormBranch = DEFAULT_CHARACTER_FOR
           "extra paws",
           "random pet photo"
         ]
-      : ["different face", "face swap", "wrong identity", "broken likeness"];
+      : ["unrecognizable face", "unrelated face", "face swap", "different person"];
   return [...baseNegativePrompt, ...branchNegativePrompt].join(", ");
 }
 

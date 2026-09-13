@@ -37,18 +37,36 @@ __FACEIDV2_WEIGHT__    FaceID v2 identity embedding strength; optional
 
 The workflow should output at least one image through a normal ComfyUI save or preview image node.
 
-## First Target
+## Current Target
 
-Use the lightest working workflow first:
+The lightest SDXL smoke workflow already proved that the app can talk to ComfyUI. The next serious quality target is Flux Kontext GGUF:
 
 ```text
 Source Photo
-  -> image-to-image or reference-image conditioning
-  -> SDXL-Lightning or another fast local checkpoint
+  -> VLM Visible Semantic Tags
+  -> Character Spec prompt
+  -> Flux Kontext image-to-image workflow
   -> card portrait output
 ```
 
 Keep HP, ATK, DEF, COST, skill names, and readable card text outside the generated image. The game UI renders those values after the image returns.
+
+Required model research target:
+
+```text
+.local-tools/ComfyUI/custom_nodes/ComfyUI-GGUF
+.local-tools/ComfyUI/models/unet/flux1-kontext-dev-Q4_K_M.gguf
+.local-tools/ComfyUI/models/text_encoders/t5-v1_1-xxl-encoder-Q4_K_M.gguf
+.local-tools/ComfyUI/models/text_encoders/clip_l.safetensors
+.local-tools/ComfyUI/models/vae/ae.safetensors
+```
+
+Download caution:
+
+```text
+Do not download the full Flux Kontext GGUF set unless the machine has enough free disk.
+The Q4_K_M experiment needs about 10.4 GB before runtime cache/swap.
+```
 
 ## Included Workflow
 
@@ -182,9 +200,9 @@ Square reference preprocessing: added 768x768 reference image to avoid implicit 
 Current interpretation:
 
 ```text
-Use this workflow as the current identity-preservation and believable-anatomy baseline.
+Use this workflow only as a historical identity-preservation and believable-anatomy baseline.
 Do not treat SDXL Turbo FaceID output as final card art.
-Increase stylization later with a better checkpoint, style LoRA, or pose/anatomy control rather than switching the MVP default back to txt2img.
+Current quality research has moved to Flux Kontext GGUF rather than continued SDXL prompt tuning.
 ```
 
 ## FaceID Reference-Only Txt2Img Workflow
@@ -236,7 +254,8 @@ Do not use it as the MVP default until pose/anatomy control is added.
 Acceptance status:
 
 ```text
-Technical pipeline: pending first smoke run
-Final card-art quality: not approved yet
-Final likeness preservation: not approved yet
+Technical pipeline: passed
+Final card-art quality: not approved
+Final likeness preservation: not approved
+Reason: more style potential than FaceID img2img, but hands/body structure remain unreliable.
 ```
