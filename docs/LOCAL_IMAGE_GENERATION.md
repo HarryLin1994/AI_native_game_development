@@ -372,6 +372,44 @@ Observed on `IMG_5027.JPG`:
 - `FaceID img2img`, `denoise 0.42`: strongest source structure and likeness, but too close to a photo.
 - `FaceID img2img`, `denoise 0.55`: best current balance for face similarity plus believable human structure; still not final card-art stylization.
 
+Humanlike arcade-photo comparison on 2026-09-13:
+
+Test source:
+
+```text
+/Users/harrylin/Downloads/Gemini_Generated_Image_iko2o0iko2o0iko2.jpg
+```
+
+Outputs:
+
+```text
+.local-tools/humanlike-local-compare/arcade-faceid-img2img.png
+.local-tools/humanlike-local-compare/arcade-faceid-txt2img.png
+.local-tools/humanlike-local-compare/arcade-faceid-img2img-denoise70.png
+.local-tools/humanlike-local-compare/arcade-cropped-faceid-img2img-denoise70.png
+```
+
+Observed result:
+
+- `FaceID img2img`, `denoise 0.55`: strongest resemblance and source structure, but still looks like an edited photo and preserves too much background context.
+- `FaceID txt2img`, `denoise 1`: stronger illustrated style, but still tends to create baked borders/fake text and unreliable hands/body structure.
+- `FaceID img2img`, `denoise 0.70`: best local humanlike candidate so far for this arcade source. It is more illustrated and removed background people, while keeping stronger face/body continuity than txt2img. It still fails final quality because background fake text and hand structure remain unreliable.
+- Naive subject crop + `FaceID img2img`, `denoise 0.70`: not approved. The output became more illustrated, but likeness weakened and the face was partly occluded. Simple cropping is not enough; subject isolation needs a better crop/mask strategy if used.
+
+Decision:
+
+```text
+Current local humanlike direction:
+  FaceID img2img around denoise 0.65-0.70
+  -> useful short-term baseline
+  -> not approved as final quality
+
+Next real upgrade:
+  Add pose/depth/anatomy control or a stronger illustration checkpoint/style LoRA.
+```
+
+Do not spend another cycle only increasing denoise or rewriting prompts for this workflow. The remaining failures are workflow/model-control limits.
+
 ## Model Capability Boundary
 
 Prompt wording can improve:

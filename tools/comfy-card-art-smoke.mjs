@@ -1,5 +1,5 @@
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { basename, extname, resolve } from "node:path";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { basename, dirname, extname, resolve } from "node:path";
 
 loadEnvFile(".env.local");
 loadEnvFile(".env");
@@ -8,14 +8,17 @@ const sourcePath = process.argv[2];
 const targetUrl = normalizeBaseUrl(process.env.MVP_URL ?? `http://127.0.0.1:${process.env.PORT ?? 5173}`);
 const outputPath = process.env.COMFY_SMOKE_OUTPUT ?? ".local-tools/comfy-smoke-output.png";
 const prompt = process.env.COMFY_SMOKE_PROMPT || [
-  "card-art-prompt-v2.3-face-first-img2img",
+  "card-art-prompt-v2.4-form-branches",
+  "CHARACTER FORM BRANCH: humanlike",
   "ROLE/PURPOSE: production character portrait art layer for game UI composition; the card frame and text will be rendered separately by the app",
   "SUBJECT: one target subject only, the same consenting person from the source photo, remade as an arcade game character challenger",
   "ANATOMY LOCK: preserve the source photo's believable human pose structure; natural hand placement, natural wrist angles, normal shoulder and neck connection, no extra limbs, no duplicated hands",
+  "SOURCE PROPORTION LOCK: preserve believable head size relative to torso, shoulder width, neck length, arm scale, hand scale, and face proportion map from the source photo",
   "IDENTITY LOCK: preserve recognizable facial likeness from the source reference: face shape, jaw impression, eye and brow spacing, nose and mouth proportions, expression character",
-  "TARGET SUBJECT VISIBLE CUES: appearance [visible face, expressive face, hairstyle, head accessory]; clothing [source-subject upper-body clothing cues]",
-  "WORLD CONTEXT FROM PHOTO: scene [arcade, neon room]; objects [arcade machines, signs]; lighting [neon lighting, dark room]; visual signal [retro energy]",
-  "ART DIRECTION: high-contrast anime-real game character illustration, heroic upper-body crop, clean readable silhouette, sharp focal face, controlled detail density, dramatic rim light",
+  "TARGET SUBJECT VISIBLE CUES: appearance [visible face, playful expression, curly medium-brown hair, white headband, headphones around neck]; clothing [striped sleeveless jersey, retro sporty outfit]; props [handheld game controller]",
+  "WORLD CONTEXT FROM PHOTO: scene [1980s arcade room, neon room]; objects [arcade machines, neon cabinet shapes]; lighting [dark indoor room with saturated neon lighting]; visual signal [retro party energy]",
+  "SCENE REMAKE: use the world context as inspiration, not as a literal photo trace; transform the subject into a new humanlike arcade challenger portrait",
+  "ART DIRECTION: neon arcade game-character portrait, high-contrast anime-real illustration, heroic upper-body crop, clean readable silhouette, sharp focal face, controlled detail density, dramatic rim light",
   "TECHNICAL OUTPUT: full-bleed 768x1024 portrait art layer, no card frame, no UI, no text, no stat panel, no logo, no watermark",
   "COMPOSITION LOCK: single foreground character, centered face and torso, dynamic but readable pose, background supports the subject, do not draw a trading card, do not draw a card border, no extra foreground people",
   "MODEL GUIDANCE: prioritize face likeness and believable human anatomy over style change; keep face recognizable; avoid over-transforming the body"
@@ -78,6 +81,7 @@ if (!match) {
   process.exit(1);
 }
 
+mkdirSync(dirname(outputPath), { recursive: true });
 writeFileSync(outputPath, Buffer.from(match[1], "base64"));
 console.log(
   JSON.stringify(
