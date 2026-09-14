@@ -1,5 +1,10 @@
 ; Engine configuration file.
-; Edit through Godot editor when possible.
+; It's best edited using the editor UI and not directly,
+; since the parameters that go here are not all obvious.
+;
+; Format:
+;   [section] ; section goes between []
+;   param=value ; assign values to parameters
 
 config_version=5
 
@@ -7,7 +12,13 @@ config_version=5
 
 config/name="Help Me My Friend"
 run/main_scene="res://scenes/card_art_lab.tscn"
-config/features=PackedStringArray("4.7")
+config/features=PackedStringArray("4.6")
+
+[autoload]
+
+MCPRuntimeBridge="*res://addons/godot_mcp/services/mcp_runtime_bridge.gd"
+MCPInputBridge="*res://addons/godot_mcp/services/mcp_input_bridge.gd"
+MCPScreenshotBridge="*res://addons/godot_mcp/services/mcp_screenshot_bridge.gd"
 
 [display]
 
