@@ -14,6 +14,52 @@ The form should feel like creating a game character, not filling out a personal-
 - Keep sensitive information optional, explicit, and consent-based.
 - Provide defaults when players skip optional questions.
 
+## Current MVP Decision
+
+The canonical current questionnaire schema is implemented in:
+
+```text
+src/card-generation/questionnaire-schema.js
+```
+
+比喻：這個 schema 像角色創建器的規格表。UI 之後可以照著它長出來；卡牌規則也可以照著它解釋「為什麼這張卡得到這些數值與技能」。
+
+Current product decisions:
+
+- 問卷不要求玩家手動填完 10 個欄位；VLM 先依照片、中心人物、場景、OCR、Capture Context、Event Context 產生角色創作方向。
+- 拍照或上傳後先跳出角色名字輸入；空白時使用 `路人`。卡牌生成名字必須包含這個名字，例如 `潮流昶志`、`陽光球員昶志`。
+- User 未來只需要在逐步彈窗中選擇少數關鍵欄位：`ageImpression`、`values`、`weakness`。
+- 其他欄位先由 VLM 自動產生並可 review / edit：`realWorldRole`、`personality`、`specialty`、`combatStyle`、`signatureItem`、`cardMood`。
+- `ageImpression`、`values`、`weakness` 是從表情、姿態、場景氛圍產生的角色候選，不是真人年齡、真人價值觀或真人缺點判斷。
+- `values` 候選要顯示一句角色敘事，不顯示 VLM tags。
+- `storyEvent` 由 VLM 根據照片場景、道具、OCR、地點/時間/節日 context 生成 4 個虛構起源事件，再由系統用 seed 隨機選一個。
+- Capture / Event Context 已自動取得，不再放進問卷。
+- Sensitive Creative Context 暫不進 MVP UI，只保留為 future-only。
+- VLM 可以帶來遊戲隨機性，但不能直接決定最終 stats、skills、rarity 或 COST。
+- 每個 free text 欄位都必須經過 rule table / capped mapping，不能直接變成任意 stat boost。
+- `cardMood` 只影響美術，不影響角色強度。
+
+Current field order:
+
+| Field | Priority | Required | Default | Model suggestion | Main effect |
+|---|---|---:|---|---|---|
+| `ageImpression` | Core | no | `young_adult` | 4 VLM candidates from expression/pose/scene | growth flavor, small stat flavor, trait/skill word |
+| `realWorldRole` | Core | no | empty | VLM auto role motif from visible context | occupation trait, stat mods, skill word, role motif |
+| `personality` | Core | no | empty | VLM auto roleplay motif from expression/pose/scene | small capped battle tendency, personality motif |
+| `specialty` | Core | no | empty | VLM auto visible non-sensitive tags | feature hooks, traits, small stat keywords |
+| `combatStyle` | Core | no | `auto` | VLM auto suggestion, rule-normalized | primary stat, Combat Role, first skill template |
+| `values` | Core | no | `growth` | 4 VLM candidates with one-sentence narrative | skill family, archetype bias, support/offense/defense flavor |
+| `weakness` | Recommended | no | empty | 4 VLM battle tradeoff candidates from expression/pose | tradeoff, counterplay, risk/reward |
+| `signatureItem` | Recommended | no | role artifact | VLM auto visible/OCR-supported prop | prop hook, passive/skill naming |
+| `storyEvent` | Optional | no | empty | 4 VLM fictional origin events, system seed picks 1 | lore, title flavor, future quest hook |
+| `cardMood` | Visual | no | `cinematic` | VLM auto visual mood | image prompt and presentation only |
+
+Excluded from the current questionnaire:
+
+- `captureContext`: automatic via EXIF GPS/time, browser GPS, Google Maps, and public holiday lookup.
+- `sensitiveCreativeContext`: future-only until consent copy, storage policy, and safe mechanics are designed.
+- Any detected age, gender, ethnicity, sexuality, politics, religion, health, or identity claim.
+
 ## Generation Control Model
 
 The project should separate four jobs:
@@ -25,11 +71,55 @@ The project should separate four jobs:
 
 比喻：User 是角色本人或編劇，OCR / Vision 是偵查員，Rule layer 是裁判，Picture generation 是畫師。偵查員不能改比分，畫師不能偷改角色技能。
 
+## VLM Creative Roll Model
+
+Current setup uses a `VLM Creative Roll` before the Character Spec is locked.
+
+```text
+Source Photo + VLM Vision Context + Capture/Event Context
+  -> VLM creates creative candidates
+  -> User chooses from 4 options for selected fields
+  -> System picks one story event candidate by seed
+  -> Character Spec locks the selected fields
+  -> Rule Tables generate stats, skills, traits, prompt hooks
+```
+
+比喻：VLM 像 DM 幫玩家丟出 4 個角色靈感，玩家選一個，裁判再照規則算角色能力。沒有被選到的靈感不會偷偷影響角色。
+
+User-choice fields for the future step-by-step modal:
+
+- `ageImpression`: 4 fictional age-direction candidates from expression, pose, and scene energy. Not real age detection.
+- `values`: 4 roleplay value candidates from expression, pose, and scene mood. Each option shows one short narrative sentence, not VLM tags. Not real belief detection.
+- `weakness`: 4 battle tradeoff candidates from expression, pose, and visible tension. Not real flaw detection.
+
+System-choice field:
+
+- `storyEvent`: 4 fictional origin events from scene, props, OCR, capture location, time, season, and public event context. The system selects one by seed so it feels game-like but remains reproducible.
+
+VLM-auto fields:
+
+- `realWorldRole`: role motif from visible context, such as arcade challenger, street runner, studio creator, or festival wanderer. Not real job detection.
+- `personality`: roleplay personality motif from expression, pose, and scene energy. Not real psychology.
+- `specialty`: visible non-sensitive skill/theme tags from props, action, outfit, scene, or OCR.
+- `combatStyle`: VLM suggestion normalized by rules into `striker`, `duelist`, `guardian`, `controller`, or `trickster`.
+- `signatureItem`: visible or OCR-supported item/prop.
+- `cardMood`: visual mood from lighting, palette, composition, and scene.
+
+VLM Creative Roll guardrails:
+
+- VLM candidates must be stored as candidates first; only the user's selected candidate becomes Character Spec input.
+- `storyEvent` is the exception: it is selected by system seed, not by User.
+- VLM cannot output final `HP / ATK / DEF / COST`, rarity, or raw stat boosts.
+- VLM cannot infer real age, identity, gender, ethnicity, sexuality, politics, religion, health, wealth, or private beliefs.
+- VLM output must include a short explanation of which visible/capture/event signals produced the candidate.
+- If the VLM fails, the Default Generation Template creates safe neutral candidates.
+
 Core guardrails:
 
 - AI models may suggest, but the Rule / Algorithm layer decides game mechanics.
 - Sensitive facts can only be User-Declared Fields.
-- Model-Suggested Fields must be visible, non-sensitive, and user-editable before they become important.
+- VLM-generated fields must be visible, non-sensitive, reviewable, and rule-normalized before they become important.
+- User-choice fields must be selected from candidates before they affect Character Spec.
 - Rule-Derived Fields must be deterministic for the same allowed inputs and generator version.
 - If an optional field is missing, use the Default Generation Template.
 - Do not let free-text answers become arbitrary stat boosts without capped mapping rules.
@@ -43,7 +133,7 @@ Required mapping for each question:
 
 - Player-facing question text.
 - Whether the answer is required, recommended, optional, or future-only.
-- Source of truth: User-Declared Field, confirmed Model-Suggested Field, Rule-Derived Field, or Default Generation Template.
+- Source of truth: User-Declared Field, VLM-generated reviewable field, User-selected VLM candidate, Rule-Derived Field, or Default Generation Template.
 - Whether OCR / Vision can suggest a value.
 - Which `Character Spec` field it writes to.
 - Which card-art prompt hooks it creates.
@@ -57,17 +147,19 @@ Required mapping for each question:
 | Field | Meaning | Source of truth | Can model suggest it? | Can it affect mechanics? | First rule |
 |---|---|---|---|---|---|
 | Consent | Permission to use the Source Photo and related context | User only | No | Controls whether generation can run | If `no`, stop generation |
-| Age Impression | Fictional age direction for the character | User | No for MVP | Yes | Applies small growth/stat flavor rules |
-| Real-World Role | Declared job, identity, hobby, or role motif | User | No, unless user asks for suggestions | Yes | Maps to role motif, trait, artifact, and skill word |
-| Visible Traits | Appearance or vibe cues such as glasses, short hair, black jacket, calm | User-confirmed | Yes, from visible non-sensitive photo details | Yes | Small capped modifiers and prompt details |
-| Combat Style | Desired battle behavior | User or `auto` | No | Yes | If `auto`, rules derive from Photo Signal |
-| Card Mood | Visual art direction | User or default | No | Mostly visual | Affects prompt and presentation, not raw power |
-| Background Story | One-line fictional origin | User or generated default | Yes, if user asks for a draft | Yes | Adds trait flavor, skill naming, and dialogue hooks |
-| Values | What the character cares about | User or default | No | Yes | Maps to support, attack, defense, control, or growth bias |
-| Weakness / Cost | Character tradeoff | User or generated neutral default | Yes, if user asks for a draft | Yes | Must be a capped tradeoff, not a stereotype or punishment |
-| Signature Item | Iconic item or prop | User-confirmed | Yes, if visible in photo or OCR | Yes | Becomes art prop, trait, passive name, or skill flavor |
-| Place Type | Coarse scene or origin place | User or optional photo scene suggestion | Yes, as non-sensitive scene label | Yes | Adds element bias, origin title, or stage flavor |
-| Time / Mood | Coarse time, lighting, or atmosphere | User or optional photo lighting suggestion | Yes, as mood label only | Yes | Adds visual mood, element bias, or first-turn flavor |
+| Character Name Seed | Required name core for generated card title | User or default `路人` | No | Name/title only | Generated Battle Card name must include this text |
+| Age Impression | Fictional age direction for the character | User-selected VLM candidate | Yes, 4 roleplay candidates from expression/pose/scene | Yes | Applies small growth/stat flavor rules; never real age detection |
+| Real-World Role | Visible role motif, hobby, or background archetype | VLM-generated, reviewable | Yes, from visible scene/prop/OCR context | Yes | Maps to role motif, trait, artifact, and skill word; not real job detection |
+| Personality | Roleplay personality motif | VLM-generated, reviewable | Yes, from expression/pose/scene energy | Yes | Small capped modifiers and skill-family flavor; not real psychology |
+| Specialty | Visible skill/theme cue | VLM-generated, reviewable | Yes, from visible non-sensitive photo details | Yes | Small capped modifiers and prompt details |
+| Combat Style | Battle behavior | VLM-generated, rule-normalized | Yes, from pose/action/scene | Yes | Rules normalize into supported combat roles |
+| Card Mood | Visual art direction | VLM-generated or default, reviewable | Yes, from lighting/palette/composition | Mostly visual | Affects prompt and presentation, not raw power |
+| Story Event | One-line fictional origin | System-selected VLM candidate | Yes, 4 fictional events from scene/capture/event context | Yes | System seed picks one; adds trait flavor, skill naming, and dialogue hooks |
+| Values | What the fictional character fights for | User-selected VLM candidate | Yes, 4 roleplay candidates with one-sentence narrative | Yes | Maps to support, attack, defense, control, or growth bias; not real belief detection |
+| Weakness / Cost | Character battle tradeoff | User-selected VLM candidate | Yes, 4 tradeoff candidates from expression/pose | Yes | Must be a capped tradeoff, not a stereotype or punishment |
+| Signature Item | Iconic item or prop | VLM-generated, reviewable | Yes, if visible in photo or OCR | Yes | Becomes art prop, trait, passive name, or skill flavor |
+| Place Type | Coarse scene or origin place | Automatic Capture Context | Yes, as non-sensitive scene label | Yes | Adds element bias, origin title, or stage flavor |
+| Time / Mood | Coarse time, lighting, or atmosphere | Automatic Capture Context | Yes, as mood label only | Yes | Adds visual mood, element bias, or first-turn flavor |
 | Sensitive Creative Context | Sexual orientation, politics, religion, health, or similar personal context | User only with explicit consent | Never | Later, maybe | Not in first MVP UI |
 
 ## Anti-Runaway Rules
@@ -159,7 +251,7 @@ Internal stats can remain richer:
 First derivation rule:
 
 ```text
-Photo Signal + User-Declared Fields + confirmed Model-Suggested Fields
+Photo Signal + VLM-auto fields + User-selected VLM candidates + optional User-Declared Fields
   -> internal stats
   -> visible Card Stat Line
   -> skills and traits
@@ -187,28 +279,34 @@ This is the working blueprint for the first questionnaire. It is not final UI co
 | Question area | MVP priority | Source of truth | Model role | Character Spec output | Card / battle output |
 |---|---|---|---|---|---|
 | Consent | Required | User only | None | `consent` | Gates generation and storage |
-| Age Impression | Basic | User | None in MVP | `generationProfile.ageImpression` | Growth flavor, small stat flavor, level cap flavor |
-| Real-World Role | Basic | User | May suggest examples only if asked | `generationProfile.realWorldRole` | Archetype, trait names, one skill word, art motif |
-| Visible Traits | Basic | User-confirmed | Suggest visible non-sensitive details | `generationProfile.visibleTraits` | Prompt details, small stat modifiers, trait tags |
-| Combat Style | Basic | User or `auto` rules | None | `generationProfile.combatStyle` | Primary internal stat, Combat Role, first skill template |
-| Card Mood | Basic | User or default | None | `generationProfile.cardMood` | Card art style, frame mood, visual effects |
-| Background Story | Recommended | User or default draft | Draft only when user asks | `userSuppliedContext.backstory` | Title, trait flavor, skill name, future dialogue hook |
-| Values | Recommended | User or default | None | `userSuppliedContext.values` | Skill family, support/offense/defense/control/growth bias |
-| Weakness / Cost | Recommended | User or neutral default | Draft only when user asks | `userSuppliedContext.weakness` | Tradeoff, cooldown, risk/reward, counterplay |
-| Signature Item | Recommended | User-confirmed | Suggest only if visible or OCR-supported | `userSuppliedContext.signatureItem` | Visual prop, passive skill name, card icon |
-| Place Type | Optional | User or confirmed scene suggestion | Suggest non-sensitive scene label | `captureContext.placeType` | Element bias, origin title, stage flavor |
-| Time / Mood | Optional | User or confirmed lighting suggestion | Suggest lighting/mood label | `captureContext.timeMood` | Visual atmosphere, element bias, first-turn flavor |
+| Age Impression | Basic | User-selected VLM candidate | Generate 4 candidates from expression/pose/scene | `generationProfile.ageImpression` | Growth flavor, small stat flavor, level cap flavor |
+| Real-World Role | Basic | VLM-generated reviewable field | Generate visible role motif, not real job | `generationProfile.realWorldRole` | Archetype, trait names, one skill word, art motif |
+| Personality | Basic | VLM-generated reviewable field | Generate roleplay personality motif, not real psychology | `generationProfile.personality` | Small capped battle tendency, personality motif |
+| Specialty | Basic | VLM-generated reviewable field | Suggest visible non-sensitive details | `generationProfile.specialty` | Prompt details, small stat modifiers, trait tags |
+| Combat Style | Basic | VLM-generated, rule-normalized | Suggest from pose/action/scene | `generationProfile.combatStyle` | Primary internal stat, Combat Role, first skill template |
+| Card Mood | Basic | VLM-generated reviewable field or default | Suggest from lighting/palette/composition | `generationProfile.cardMood` | Card art style, frame mood, visual effects |
+| Story Event | Recommended | System-selected VLM candidate | Generate 4 fictional origin events and pick 1 by seed | `userSuppliedContext.storyEvents` | Title, trait flavor, skill name, future dialogue hook |
+| Values | Recommended | User-selected VLM candidate | Generate 4 roleplay values | `userSuppliedContext.values` | Skill family, support/offense/defense/control/growth bias |
+| Weakness / Cost | Recommended | User-selected VLM candidate | Generate 4 battle tradeoffs | `userSuppliedContext.weakness` | Tradeoff, cooldown, risk/reward, counterplay |
+| Signature Item | Recommended | VLM-generated reviewable field | Suggest only if visible or OCR-supported | `userSuppliedContext.signatureItem` | Visual prop, passive skill name, card icon |
+| Place Type | Automatic | EXIF/GPS/Google Maps/VLM-confirmed scene context | Suggest non-sensitive scene label | `captureContext.placeType` | Element bias, origin title, stage flavor |
+| Time / Mood | Automatic | EXIF/runtime capture time and lighting context | Suggest lighting/mood label | `captureContext.timeMood` | Visual atmosphere, element bias, first-turn flavor |
 | Sensitive Creative Context | Future-only | User only with explicit consent | Never infer | `sensitiveCreativeContext` | Later: motifs, team synergy, narrative unlocks |
 
 First UX rule:
 
-- Basic questions should fit on one clear screen after photo upload.
-- Recommended questions can be shown as an "advanced flavor" section.
-- Optional Capture Context should be manual and coarse in MVP.
+- The setup screen should show VLM-generated character direction first, then ask only for key choices.
+- Current MVP uses a name popup after photo intake; empty input becomes `路人`.
+- Future Character Roll should be a step-by-step modal sequence: 年齡印象 -> 價值觀 -> 弱點 / 代價.
+- The 3 user-choice fields should appear as four-option pickers, not free-text fields.
+- Values options should show one narrative sentence per option, not VLM tag lists.
+- Story Event should not be a user-choice modal step; the system randomly selects one seeded event.
+- VLM-auto fields should appear as reviewable chips or compact rows, with edit later if needed.
+- Capture / Event Context should stay automatic and should not become a manual location/time form.
 - Sensitive Creative Context should stay out of the first UI until consent and storage rules are designed.
-- Model suggestions should appear as editable chips, not hidden decisions.
+- Model suggestions must not be hidden decisions; the UI should show why they were generated.
 
-比喻：問卷像角色創建器的「快速模式 + 進階模式」。快速模式能立刻開卡；進階模式讓角色更有故事，但不能卡住玩家。
+比喻：問卷像角色創建器的「命運抽籤 + 確認」。系統先抽出 4 個有趣方向，玩家挑年齡、價值觀、弱點；故事事件像遊戲抽到的起源，不需要玩家自己選。
 
 ## First Stat And Skill Imagination
 
@@ -266,68 +364,55 @@ Rule:
 - If the subject is someone else, the user must confirm that the subject agreed.
 - Consent should cover Source Photo, User-Supplied Context, and optional Capture Context separately later.
 
-### Step 1: Core Character Direction
+### Step 1: VLM Character Roll
 
-These should appear in the basic MVP form.
+After photo upload, the VLM creates the first draft of character direction.
 
-Questions:
+Auto-generated review fields:
 
-1. 你想讓這個角色的年齡印象偏向？
-   - 少年
-   - 青年
-   - 成年
-   - 資深
-   - 傳奇
+- `realWorldRole`: visible role motif, such as arcade challenger, campus explorer, street athlete, studio creator.
+- `personality`: roleplay personality motif, such as playful, calm, ambitious, mysterious.
+- `specialty`: visible skill/theme tags from scene, prop, action, outfit, or OCR.
+- `combatStyle`: rule-normalized battle style suggestion.
+- `signatureItem`: visible or OCR-supported prop.
+- `cardMood`: art mood from lighting, palette, composition, and scene.
 
-2. 這個角色在現實中的身份或背景是什麼？
-   - Free text
-   - Examples: 工程師、學生、設計師、運動員、創作者、研究者
+Rules:
 
-3. 這個角色最明顯的外觀或氣質特徵是什麼？
-   - Free text tags
-   - Examples: 眼鏡、短髮、黑外套、冷靜、運動感、神秘
+- These are VLM-sourced roleplay/game motifs, not factual claims about the person.
+- User can review them, but the first MVP does not need a long manual edit form.
+- The Rule layer normalizes them before mechanics use them.
 
-4. 你希望這個角色的戰鬥風格是？
-   - 自動判定
-   - 攻擊壓制
-   - 速度連擊
-   - 防禦守護
-   - 控制干擾
-   - 幸運奇襲
+### Step 2: User Choice
 
-5. 你希望卡面氣質偏向？
-   - 電影感
-   - 霓虹科技
-   - 祕法幻想
-   - 街頭英雄
-   - 史詩王者
+The user chooses one option from 4 VLM candidates for the fields that define character flavor and battle tradeoff. In the current MVP, only the character name popup is implemented; this step becomes a modal flow later.
 
-### Step 2: Story Flavor
+Choice groups:
 
-These are recommended, but skippable.
+1. 年齡印象
+   - 4 fictional roleplay age directions from expression, pose, and scene.
+   - This is not real age detection.
 
-Questions:
+2. 價值觀
+   - 4 fictional values or fighting motivations from expression and scene mood.
+   - Each option should show one short narrative sentence.
+   - Do not show VLM tags here.
+   - This is not real belief detection.
 
-1. 這個角色的背景故事一句話是什麼？
-   - Free text
-   - Example: 曾經是城市裡的資料分析師，現在用光線與符號作戰。
+3. 弱點 / 代價
+   - 4 battle tradeoff options from expression, pose, visible tension, and role motif.
+   - This must become risk/reward design, not a punishment.
 
-2. 這個角色最重視什麼？
-   - 友情
-   - 自由
-   - 秩序
-   - 勝利
-   - 知識
-   - 守護
-   - 自訂
+Rule:
 
-3. 這個角色的弱點或代價是什麼？
-   - Free text
-   - Example: 過度分析、容易衝動、害怕失去隊友
+- Unselected candidates are discarded and must not affect stats or prompts.
+- If the user skips a group, choose the safest default candidate generated from the Default Generation Template.
 
-4. 這個角色的招牌物品是什麼？
-   - Free text
-   - Example: 耳機、筆電、護身符、相機、球鞋、舊外套
+System random group:
+
+- 故事事件
+  - VLM creates 4 fictional origin events from scene, prop, OCR, capture location, time, season, and public event context.
+  - The system selects one by seed; this selected event becomes lore, skill naming, prompt hook, and later progression hook.
 
 ### Step 3: Optional Sensitive Creative Context
 
@@ -355,49 +440,21 @@ Rules:
 
 ### Step 4: Capture Context
 
-This should be optional and coarse by default.
+Capture Context is no longer a questionnaire section in the current MVP.
 
-Questions:
+Current rule:
 
-1. 是否要使用拍攝時間作為角色生成材料？
-   - 不使用
-   - 使用概略時間
+- Uploaded JPEG can provide EXIF capture time and GPS.
+- If EXIF GPS is missing, Browser Geolocation can provide GPS after consent.
+- Server resolves address, Google place, place type, and public holiday context automatically.
+- Missing Google Maps data falls back to internal location hooks, not a Google Maps URL.
+- User-facing review UI can come later, but the first questionnaire should not ask users to manually classify location/time.
 
-2. 是否要使用拍攝地點作為角色生成材料？
-   - 不使用
-   - 使用場所類型
-   - 使用概略地區
-
-3. 場所類型是？
-   - 室內
-   - 街道
-   - 學校
-   - 辦公室
-   - 公園
-   - 海邊
-   - 山區
-   - 交通場所
-   - 自訂
-
-4. 天氣或氛圍是？
-   - 晴朗
-   - 雨天
-   - 夜晚
-   - 黃昏
-   - 霓虹
-   - 安靜
-   - 混亂
-   - 自訂
-
-Rules:
-
-- Default should not require exact GPS.
-- Exact location should not be needed for MVP.
-- Capture Context should create flavor and mechanics, not tracking.
+Capture Context should create flavor and mechanics, not tracking.
 
 ## Default Generation Template
 
-Use this when optional fields are skipped:
+Use this when optional fields are skipped or VLM candidate generation fails:
 
 ```json
 {
@@ -406,6 +463,9 @@ Use this when optional fields are skipped:
   "placeType": "neutral arena",
   "weatherMood": "clear",
   "values": ["growth"],
+  "ageImpression": "young_adult",
+  "weakness": "steady but predictable",
+  "storyEvent": "entered a quiet training gate and awakened a balanced card form",
   "storyTone": "rising challenger",
   "mechanicBias": "balanced"
 }
@@ -440,11 +500,7 @@ Example structure:
     "mode": "none",
     "text": ""
   },
-  "captureContext": {
-    "timeMood": "night",
-    "placeType": "street",
-    "weatherMood": "neon"
-  }
+  "captureContext": "automatic_context"
 }
 ```
 
@@ -452,14 +508,14 @@ Example structure:
 
 The first rules can stay simple:
 
-- Age Impression affects stat modifiers and growth flavor.
-- Real-World Role affects trait, artifact, and one skill word.
-- Visible Traits affect small stat bonuses and card art prompt details.
-- Combat Style decides primary stat and battle role.
-- Card Mood affects image prompt and UI presentation.
-- Backstory and values affect trait names, skill flavor, and future dialogue options.
-- Weakness can become a tradeoff, but not a punishment tied to sensitive identity.
-- Signature Item can become a visual prop or passive skill name.
+- User-selected Age Impression candidate affects stat modifiers and growth flavor.
+- VLM-generated Real-World Role motif affects trait, artifact, and one skill word.
+- VLM-generated Personality and Specialty tags affect small stat bonuses and card art prompt details.
+- VLM-generated Combat Style is normalized by rules and decides primary stat and battle role.
+- VLM-generated Card Mood affects image prompt and UI presentation only.
+- User-selected Story Event and Values candidates affect trait names, skill flavor, and future dialogue options.
+- User-selected Weakness candidate becomes a battle tradeoff, not a punishment tied to sensitive identity.
+- VLM-generated Signature Item can become a visual prop or passive skill name.
 - Capture Context can affect element bias, origin title, stage modifier, or skill flavor.
 
 Example:
@@ -479,22 +535,23 @@ The questionnaire should eventually become a guided character-generation flow, n
 ### Phase 1: Local MVP
 
 - User uploads a Source Photo.
-- User answers the basic and recommended questions manually.
-- Rules create a deterministic Character Spec.
+- VLM creates auto fields and 4 candidate choices for key roleplay fields.
+- User selects from the 4-choice groups; skipped groups use safe defaults.
+- Rules create a deterministic Character Spec from selected candidates, VLM-auto fields, and capture/event context.
 - Card Stat Line, Traits, Skills, and Card Cover are generated from that Character Spec.
 - Save only what is needed for the Battle Card; source-photo retention needs explicit opt-in.
 
 ### Phase 2: Confirmed Model Suggestions
 
-- OCR / Vision suggests visible traits, colors, OCR text, place type, and lighting mood.
-- User confirms or edits those suggestions before they affect mechanics.
+- OCR / Vision suggests visible traits, colors, OCR text, place type, lighting mood, and roleplay candidates.
+- User confirms, selects, or edits those suggestions before they affect mechanics.
 - The UI shows a short explanation such as: `你確認了「霓虹夜晚」與「筆電」，因此角色獲得資料/電系傾向。`
 
 ### Phase 3: Card Art Adapter
 
 - Character Spec becomes the single source for card art prompt generation.
 - Source Photo guides likeness and pose.
-- User answers guide costume, element, aura, background, props, and mood.
+- User-selected candidates and VLM-auto fields guide costume, element, aura, background, props, and mood.
 - Generated art cannot change stats after the fact.
 
 ### Phase 4: Progression And Memory
@@ -512,18 +569,23 @@ The questionnaire should eventually become a guided character-generation flow, n
 
 ## MVP Question Set
 
-First implementation should only add a small advanced section, not the full long form.
+First implementation should not add a full long form.
 
-First pass implementation status: the fields were prototyped, then moved out of the main generator UI after review. The main screen should stay card-first. For now these fields exist as hidden/default generation inputs until a separate setup or review flow is designed.
+First pass implementation status: the fields were prototyped, then moved out of the main generator UI after review. The main screen should stay card-first. The next setup flow should show VLM-generated fields and 4-choice candidate groups instead of asking the player to manually fill everything.
 
-Prototype/default fields:
+Current setup fields:
 
-1. 背景故事一句話
-2. 最重視什麼
-3. 弱點或代價
-4. 招牌物品
-5. 場所類型
-6. 時間 / 氣氛
+1. 角色名字：拍照或上傳後跳窗輸入；空白預設 `路人`；生成卡名必須包含這個名字。
+2. 年齡印象：VLM 產生 4 個候選，未來彈窗讓 User 選 1 個。
+3. 價值觀：VLM 產生 4 個候選，每個候選一句角色敘事，未來彈窗讓 User 選 1 個。
+4. 弱點或代價：VLM 產生 4 個候選，未來彈窗讓 User 選 1 個。
+5. 故事事件：VLM 產生 4 個候選，系統 seed 隨機選 1 個。
+6. 身份 / 背景：VLM 自動生成，可 review。
+7. 性格：VLM 自動生成，可 review。
+8. 專長 / 特色：VLM 自動生成，可 review。
+9. 戰鬥風格：VLM 自動生成後由規則正規化，可 review。
+10. 招牌物品：VLM 自動生成，可 review。
+11. 卡面氣質：VLM 自動生成，可 review；只影響美術。
 
 Consent should be handled at game entry / onboarding, not inside the card generator screen.
 
@@ -532,6 +594,6 @@ Do not add sensitive creative context to the UI until consent copy, storage beha
 ## Open Questions
 
 - Should sensitive creative context be allowed in the first local MVP UI, or only documented for now?
-- Should capture time/location come from device APIs later, or stay manual in MVP?
 - Should Character Spec store exact user text, normalized tags, or both?
 - Should users be able to edit the generated Character Spec before making the card art?
+- Should the four VLM candidates be deterministic from seed for replay/debug, or should each reroll request create fresh candidates?

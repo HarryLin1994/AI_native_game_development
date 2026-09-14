@@ -76,8 +76,9 @@
             </select>
             <select id="imageModeInput">
               <option value="local" selected>本機預覽，不呼叫 AI</option>
+              <option value="gemini">Google Gemini / Nano Banana 生圖</option>
               <option value="comfy">本機 ComfyUI 生圖</option>
-              <option value="ai">外部 OpenAI 圖片修飾</option>
+              <option value="openai">OpenAI 圖片 API</option>
             </select>
             <textarea id="backstoryInput" maxlength="120"></textarea>
             <select id="valueInput">
@@ -164,6 +165,27 @@
           <div class="deck-list" id="deckList"></div>
         </section>
       </main>
+    </div>
+
+    <div class="modal-overlay" id="branchChoiceModal" hidden>
+      <section
+        class="branch-choice-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="branchChoiceTitle"
+        aria-describedby="branchChoiceSubtitle"
+      >
+        <div class="branch-choice-heading">
+          <div>
+            <p class="eyebrow">Evolution</p>
+            <h2 id="branchChoiceTitle">進化分支選擇</h2>
+            <p id="branchChoiceSubtitle">選擇一條成長路線</p>
+          </div>
+          <span class="pill" id="branchChoiceSlot">Skill Branch</span>
+        </div>
+        <div class="branch-choice-options" id="branchChoiceOptions"></div>
+        <p class="branch-choice-note" id="branchChoiceNote"></p>
+      </section>
     </div>
 
     <canvas id="analysisCanvas" width="128" height="128" hidden></canvas>

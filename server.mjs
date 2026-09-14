@@ -4,6 +4,12 @@ import { existsSync, readFileSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { basename, extname, isAbsolute, join, normalize, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  buildQuestionnaireCandidatePrompt,
+  createFallbackQuestionnaireCandidates,
+  normalizeQuestionnaireCandidatePayload,
+  questionnaireCandidateJsonSchema
+} from "./src/card-generation/questionnaire-candidates.js";
 
 const root = fileURLToPath(new URL(".", import.meta.url));
 loadEnvFile(join(root, ".env.local"));
@@ -11,6 +17,18 @@ loadEnvFile(join(root, ".env"));
 const port = Number(process.env.PORT ?? 5173);
 const host = process.env.HOST ?? "127.0.0.1";
 const imageModel = process.env.OPENAI_IMAGE_MODEL ?? "gpt-image-1";
+const openAiImageTimeoutMs = Number(process.env.OPENAI_IMAGE_TIMEOUT_MS ?? 120000);
+const geminiImageModel = process.env.GEMINI_IMAGE_MODEL ?? "nano-banana-pro-preview";
+const geminiApiKey = process.env.GEMINI_API_KEY ?? process.env.GOOGLE_API_KEY ?? "";
+const geminiImageUrl = normalizeBaseUrl(process.env.GEMINI_IMAGE_URL ?? "https://generativelanguage.googleapis.com/v1beta/interactions");
+const geminiImageTimeoutMs = Number(process.env.GEMINI_IMAGE_TIMEOUT_MS ?? 120000);
+const geminiImageAspectRatio = process.env.GEMINI_IMAGE_ASPECT_RATIO ?? "3:4";
+const geminiImageSize = process.env.GEMINI_IMAGE_SIZE ?? "1K";
+const geminiImageMimeType = process.env.GEMINI_IMAGE_MIME_TYPE ?? "image/jpeg";
+const googleMapsApiKey = process.env.GOOGLE_MAPS_API_KEY ?? process.env.GOOGLE_API_KEY ?? "";
+const googleMapsTimeoutMs = Number(process.env.GOOGLE_MAPS_TIMEOUT_MS ?? 8000);
+const holidayApiBaseUrl = normalizeBaseUrl(process.env.HOLIDAY_API_BASE_URL ?? "https://date.nager.at/api/v3");
+const holidayApiTimeoutMs = Number(process.env.HOLIDAY_API_TIMEOUT_MS ?? 8000);
 const comfyUrl = normalizeBaseUrl(process.env.COMFYUI_URL ?? "http://127.0.0.1:8188");
 const comfyTimeoutMs = Number(process.env.COMFYUI_TIMEOUT_MS ?? 3000);
 const comfyWorkflowPath = resolveOptionalPath(process.env.COMFYUI_WORKFLOW_PATH);
@@ -53,6 +71,31 @@ const server = createServer(async (req, res) => {
 
     if (req.method === "POST" && url.pathname === "/api/vision-tags") {
       await handleVisionTags(req, res);
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/questionnaire-candidates") {
+      await handleQuestionnaireCandidates(req, res);
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/capture-context") {
+      await handleCaptureContext(req, res);
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/card-art") {
+      await handleCardArt(req, res);
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/card-art-compare") {
+      await handleCardArtCompare(req, res);
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/gemini-card-art") {
+      await handleGeminiCardArt(req, res);
       return;
     }
 
@@ -134,16 +177,12 @@ async function handleComfyCardArt(req, res) {
   }
 
   try {
-    const negativePrompt =
-      String(body.negativePrompt ?? "").slice(0, 1600) ||
-      "text, logo, watermark, extra people, identity document, low quality, distorted face, cropped head";
-    const workflowTemplate = readComfyWorkflowTemplate();
-    const sourceDebug = await saveDebugSourceImage(image);
-    const upload = await uploadComfySourceImage(image);
-    const workflow = fillComfyWorkflowTemplate(workflowTemplate, {
-      sourceImage: upload.name,
+    const result = await generateComfyCardArt({
+      image,
       prompt,
-      negativePrompt,
+      negativePrompt:
+        String(body.negativePrompt ?? "").slice(0, 1600) ||
+        "text, logo, watermark, extra people, identity document, low quality, distorted face, cropped head",
       seed: Number.isFinite(Number(body.seed)) ? Number(body.seed) : randomSeed(),
       width: Number.isFinite(Number(body.width)) ? Number(body.width) : 768,
       height: Number.isFinite(Number(body.height)) ? Number(body.height) : 1024,
@@ -152,27 +191,7 @@ async function handleComfyCardArt(req, res) {
       ipadapterWeight: readNumber(body.ipadapterWeight, Number(process.env.COMFYUI_IPADAPTER_WEIGHT ?? 1)),
       faceidv2Weight: readNumber(body.faceidv2Weight, Number(process.env.COMFYUI_FACEIDV2_WEIGHT ?? 2))
     });
-    const promptResult = await submitComfyPrompt(workflow);
-    const output = await waitForComfyOutput(promptResult.promptId);
-    const imageDataUrl = await fetchComfyImageAsDataUrl(output.image);
-
-    sendJson(res, 200, {
-      imageDataUrl,
-      provider: "comfyui",
-      promptId: promptResult.promptId,
-      workflow: summarizeComfyWorkflow(),
-      source: {
-        mime: image.mime,
-        bytes: image.buffer.length,
-        debugPath: sourceDebug.relativePath,
-        comfyInput: upload.name
-      },
-      output: {
-        filename: output.image.filename,
-        subfolder: output.image.subfolder ?? "",
-        type: output.image.type ?? "output"
-      }
-    });
+    sendJson(res, 200, result);
   } catch (error) {
     const status = error.statusCode ?? 502;
     sendJson(res, status, {
@@ -293,84 +312,880 @@ async function handleVisionTags(req, res) {
   }
 }
 
-async function handleAiRetouch(req, res) {
-  if (!process.env.OPENAI_API_KEY) {
-    sendJson(res, 501, {
-      error: "missing_api_key",
-      message: "OPENAI_API_KEY is not set. Set it in Terminal before starting the server."
+async function handleQuestionnaireCandidates(req, res) {
+  const body = await readJsonBody(req, 12 * 1024 * 1024);
+  const image = parseDataUrl(body.imageDataUrl);
+  const subjectImage = parseDataUrl(body.subjectImageDataUrl) ?? image;
+  const hasSubjectCrop = Boolean(body.subjectImageDataUrl && subjectImage && subjectImage !== image);
+  const seed = Number.isFinite(Number(body.seed)) ? Number(body.seed) : randomSeed();
+  const context = {
+    analysis: body.analysis ?? {},
+    captureContext: body.captureContext ?? {},
+    eventContext: body.eventContext ?? {},
+    seed
+  };
+
+  if (!image) {
+    sendJson(res, 200, {
+      ok: true,
+      provider: "fallback_candidate_builder",
+      model: null,
+      warning: "imageDataUrl missing; returned deterministic safe fallback candidates.",
+      ...createFallbackQuestionnaireCandidates(context)
     });
     return;
   }
 
-  const body = await readJsonBody(req, 12 * 1024 * 1024);
-  const image = parseDataUrl(body.imageDataUrl);
-  const prompt = String(body.prompt ?? "").slice(0, 3800);
-  if (!image || !prompt) {
+  try {
+    const startedAt = Date.now();
+    const subjectFocus = normalizeSubjectFocus(body.subjectFocus);
+    const response = await fetch(`${visionVlmUrl}/api/chat`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        model: visionVlmModel,
+        stream: false,
+        format: questionnaireCandidateJsonSchema(),
+        messages: [
+          {
+            role: "user",
+            content: buildQuestionnaireCandidatePrompt({
+              subjectFocus,
+              hasSubjectCrop,
+              analysis: context.analysis,
+              captureContext: context.captureContext,
+              eventContext: context.eventContext
+            }),
+            images: hasSubjectCrop
+              ? [subjectImage.buffer.toString("base64"), image.buffer.toString("base64")]
+              : [image.buffer.toString("base64")]
+          }
+        ],
+        options: {
+          temperature: 0.65,
+          top_p: 0.9,
+          seed,
+          num_predict: 1400
+        }
+      }),
+      signal: AbortSignal.timeout(visionVlmTimeoutMs)
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw createHttpError(response.status, "questionnaire_candidates_vlm_failed", "Local VLM candidate generation failed.", payload);
+    }
+
+    const content = payload.message?.content ?? payload.response ?? "";
+    const candidates = normalizeQuestionnaireCandidatePayload(parseLooseJson(content), context);
+    sendJson(res, 200, {
+      ok: true,
+      provider: "ollama",
+      model: visionVlmModel,
+      subjectFocus,
+      subjectImageMode: hasSubjectCrop ? "center_crop_plus_full_image" : "full_image_only",
+      latencyMs: Date.now() - startedAt,
+      seed,
+      ...candidates,
+      raw: {
+        content
+      }
+    });
+  } catch (error) {
+    sendJson(res, 200, {
+      ok: true,
+      provider: "fallback_candidate_builder",
+      model: visionVlmModel,
+      seed,
+      warning: "Local VLM candidate generation failed; returned deterministic safe fallback candidates.",
+      error: error.code ?? "questionnaire_candidates_vlm_unavailable",
+      message: error.message,
+      details: error.details ?? null,
+      ...createFallbackQuestionnaireCandidates(context)
+    });
+  }
+}
+
+async function handleCaptureContext(req, res) {
+  const body = await readJsonBody(req, 64 * 1024);
+  try {
+    const result = await resolveAutomaticCaptureContext(body);
+    sendJson(res, 200, result);
+  } catch (error) {
+    sendJson(res, error.statusCode ?? 500, {
+      ok: false,
+      error: error.code ?? "capture_context_failed",
+      message: error.message,
+      details: error.details ?? null
+    });
+  }
+}
+
+async function resolveAutomaticCaptureContext(body) {
+  const runtimeMoment = createServerCaptureMoment();
+  const captureMoment = normalizeCaptureMoment(body.captureMoment, runtimeMoment);
+  const worldEventMoment = normalizeCaptureMoment(body.worldEventMoment, runtimeMoment);
+  const location = normalizeRequestLocation(body.location);
+  const geocoding = location?.coordinates && googleMapsApiKey ? await reverseGeocodeLocation(location.coordinates) : missingGoogleMapsResult("geocoding");
+  const nearbyPlace = location?.coordinates && googleMapsApiKey ? await findNearbyGooglePlace(location.coordinates) : missingGoogleMapsResult("places");
+  const holidayRegion = normalizeHolidayRegion(body.holidayRegion);
+  const countryCode = holidayRegion.countryCode;
+  const regionCode = holidayRegion.regionCode;
+  const holidays = await resolveHolidayContext(worldEventMoment.localDate, countryCode, regionCode);
+  const googlePlace = nearbyPlace.place ?? null;
+  const placeTypes = mergeContextStrings([...(googlePlace?.types ?? []), ...geocoding.types], 12);
+  const placeType = inferGamePlaceType(placeTypes, googlePlace?.displayName?.text || googlePlace?.displayName || geocoding.formattedAddress);
+  const timeMood = inferTimeMoodFromMoment(captureMoment.capturedAt);
+  const locationReference = buildResolvedLocationReference({
+    location,
+    geocoding,
+    googlePlace,
+    placeTypes
+  });
+
+  return {
+    ok: true,
+    provider: "automatic_capture_context",
+    captureContext: {
+      capturedAt: captureMoment.capturedAt,
+      localDate: captureMoment.localDate,
+      timezone: captureMoment.timezone,
+      locationUse: location ? "exact" : "none",
+      locationGranularity: location ? "exact" : "none",
+      placeType,
+      timeMood,
+      locationReference,
+      locationCreativeTags: buildServerLocationCreativeTags(placeType, timeMood, placeTypes),
+      acquisitionStatus: {
+        location: location?.acquisitionMethod ?? "none",
+        geocoding: geocoding.status,
+        googleMaps: nearbyPlace.status
+      }
+    },
+    eventContext: {
+      localDate: worldEventMoment.localDate,
+      timezone: worldEventMoment.timezone,
+      countryCode,
+      regionCode,
+      eventDatePolicy: "current_real_world_us",
+      eventDateSource: "browser_runtime_current_date",
+      captureLocalDate: captureMoment.localDate,
+      eventSource: holidays.status === "ok" ? "public_holiday_api" : "local_static_date_motifs",
+      holidayTags: holidays.holidayTags,
+      localEventTags: [],
+      eventCreativeTags: holidays.eventCreativeTags,
+      publicHolidays: holidays.publicHolidays
+    },
+    acquisitionStatus: {
+      location: location?.acquisitionMethod ?? "none",
+      geocoding: geocoding.status,
+      googleMaps: nearbyPlace.status,
+      holidays: holidays.status,
+      source: body.sourceMetadata?.source ?? body.reason ?? "runtime"
+    },
+    sourceMetadata: {
+      source: String(body.sourceMetadata?.source ?? body.reason ?? "runtime").slice(0, 48),
+      exifPresent: Boolean(body.sourceMetadata?.exifPresent),
+      fileName: String(body.sourceMetadata?.fileName ?? "").slice(0, 120)
+    }
+  };
+}
+
+async function reverseGeocodeLocation(coordinates) {
+  const url = new URL("https://maps.googleapis.com/maps/api/geocode/json");
+  url.searchParams.set("latlng", `${coordinates.latitude},${coordinates.longitude}`);
+  url.searchParams.set("key", googleMapsApiKey);
+  try {
+    const response = await fetch(url, {
+      signal: AbortSignal.timeout(googleMapsTimeoutMs)
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || payload.status !== "OK") {
+      return {
+        status: payload.status ? `google_geocoding_${payload.status.toLowerCase()}` : "google_geocoding_error",
+        formattedAddress: "",
+        addressComponents: [],
+        countryCode: "",
+        regionCode: "",
+        types: [],
+        details: payload.error_message ?? null
+      };
+    }
+    const first = payload.results?.[0] ?? {};
+    const components = Array.isArray(first.address_components) ? first.address_components : [];
+    return {
+      status: "ok",
+      formattedAddress: String(first.formatted_address ?? "").slice(0, 220),
+      googlePlaceId: String(first.place_id ?? "").slice(0, 120),
+      addressComponents: components.map(normalizeGoogleAddressComponent).filter(Boolean),
+      countryCode: readAddressComponentShortName(components, "country"),
+      regionCode: readAddressComponentShortName(components, "administrative_area_level_1"),
+      types: normalizeStringListForServer(first.types, 12)
+    };
+  } catch (error) {
+    return {
+      status: "google_geocoding_unavailable",
+      formattedAddress: "",
+      addressComponents: [],
+      countryCode: "",
+      regionCode: "",
+      types: [],
+      details: error.message
+    };
+  }
+}
+
+async function findNearbyGooglePlace(coordinates) {
+  try {
+    const response = await fetch("https://places.googleapis.com/v1/places:searchNearby", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-goog-api-key": googleMapsApiKey,
+        "x-goog-fieldmask": "places.id,places.displayName,places.formattedAddress,places.types,places.googleMapsUri,places.location"
+      },
+      body: JSON.stringify({
+        rankPreference: "DISTANCE",
+        maxResultCount: 1,
+        locationRestriction: {
+          circle: {
+            center: {
+              latitude: coordinates.latitude,
+              longitude: coordinates.longitude
+            },
+            radius: 120
+          }
+        }
+      }),
+      signal: AbortSignal.timeout(googleMapsTimeoutMs)
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      return {
+        status: "google_places_error",
+        place: null,
+        details: payload
+      };
+    }
+    const place = payload.places?.[0] ?? null;
+    return {
+      status: place ? "ok" : "no_nearby_place",
+      place,
+      details: null
+    };
+  } catch (error) {
+    return {
+      status: "google_places_unavailable",
+      place: null,
+      details: error.message
+    };
+  }
+}
+
+async function resolveHolidayContext(localDate, countryCode, regionCode) {
+  if (!localDate || !countryCode) {
+    return {
+      status: "missing_country_or_date",
+      holidayTags: [],
+      eventCreativeTags: [],
+      publicHolidays: []
+    };
+  }
+  const year = String(localDate).slice(0, 4);
+  try {
+    const response = await fetch(`${holidayApiBaseUrl}/PublicHolidays/${year}/${countryCode}`, {
+      signal: AbortSignal.timeout(holidayApiTimeoutMs)
+    });
+    const payload = await response.json().catch(() => []);
+    if (!response.ok || !Array.isArray(payload)) {
+      return {
+        status: "holiday_api_error",
+        holidayTags: [],
+        eventCreativeTags: [],
+        publicHolidays: []
+      };
+    }
+    const publicHolidays = payload
+      .filter((holiday) => holiday.date === localDate)
+      .filter((holiday) => holiday.counties == null || !regionCode || holiday.counties.some((county) => String(county).endsWith(`-${regionCode}`)))
+      .slice(0, 4)
+      .map((holiday) => ({
+        date: holiday.date,
+        localName: String(holiday.localName ?? "").slice(0, 80),
+        name: String(holiday.name ?? "").slice(0, 80),
+        countryCode: holiday.countryCode,
+        types: normalizeStringListForServer(holiday.types, 6)
+      }));
+    return {
+      status: "ok",
+      holidayTags: mergeContextStrings(publicHolidays.map((holiday) => holiday.name || holiday.localName).map(createHolidayTag), 8),
+      eventCreativeTags: mergeContextStrings(publicHolidays.flatMap(createHolidayCreativeTags), 12),
+      publicHolidays
+    };
+  } catch (error) {
+    return {
+      status: "holiday_api_unavailable",
+      holidayTags: [],
+      eventCreativeTags: [],
+      publicHolidays: [],
+      details: error.message
+    };
+  }
+}
+
+function buildResolvedLocationReference({ location, geocoding, googlePlace, placeTypes }) {
+  const displayName = googlePlace?.displayName?.text ?? googlePlace?.displayName ?? "";
+  return {
+    coordinates: location?.coordinates ?? null,
+    accuracyMeters: location?.accuracyMeters ?? null,
+    gpsMethod: location?.acquisitionMethod ?? "none",
+    acquisitionMethod: location?.acquisitionMethod ?? "none",
+    addressMethod: geocoding.status === "ok" ? "google_reverse_geocoding" : "none",
+    googleMapsMethod: googlePlace ? "google_places_nearby_search" : "none",
+    formattedAddress: geocoding.formattedAddress || googlePlace?.formattedAddress || "",
+    addressComponents: geocoding.addressComponents ?? [],
+    googlePlaceId: googlePlace?.id ?? geocoding.googlePlaceId ?? "",
+    googleMapsUrl: googlePlace?.googleMapsUri ?? "",
+    displayName: String(displayName).slice(0, 96),
+    placeTypes,
+    allowExactForPrompt: false
+  };
+}
+
+function normalizeRequestLocation(value) {
+  if (!value || typeof value !== "object") return null;
+  const rawCoordinates = value.coordinates ?? value;
+  const latitude = Number(rawCoordinates.latitude ?? rawCoordinates.lat);
+  const longitude = Number(rawCoordinates.longitude ?? rawCoordinates.lng ?? rawCoordinates.lon);
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
+  if (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) return null;
+  return {
+    coordinates: {
+      latitude: Number(latitude.toFixed(6)),
+      longitude: Number(longitude.toFixed(6))
+    },
+    accuracyMeters: Number.isFinite(Number(value.accuracyMeters)) ? Math.round(Number(value.accuracyMeters)) : null,
+    acquisitionMethod: normalizeAcquisitionMethod(value.acquisitionMethod)
+  };
+}
+
+function normalizeCaptureMoment(input, fallback) {
+  const capturedAt = normalizeIsoLikeDate(input?.capturedAt) || fallback.capturedAt;
+  const localDate = normalizeLocalDate(input?.localDate) || normalizeLocalDate(capturedAt) || fallback.localDate;
+  return {
+    capturedAt,
+    localDate,
+    timezone: String(input?.timezone || fallback.timezone || "unknown").slice(0, 64)
+  };
+}
+
+function normalizeHolidayRegion(input = {}) {
+  const rawCountry = String(input?.countryCode || process.env.HOLIDAY_COUNTRY_CODE || "US")
+    .trim()
+    .toUpperCase();
+  const countryCode = /^[A-Z]{2}$/u.test(rawCountry) ? rawCountry : "US";
+  const rawRegion = String(input?.regionCode || process.env.HOLIDAY_REGION_CODE || "")
+    .trim()
+    .toUpperCase();
+  return {
+    countryCode,
+    regionCode: /^[A-Z0-9-]{1,12}$/u.test(rawRegion) ? rawRegion : ""
+  };
+}
+
+function createServerCaptureMoment() {
+  const now = new Date();
+  return {
+    capturedAt: now.toISOString(),
+    localDate: now.toISOString().slice(0, 10),
+    timezone: "server"
+  };
+}
+
+function normalizeIsoLikeDate(value) {
+  const text = String(value ?? "").trim();
+  if (!text) return "";
+  if (/^\d{4}-\d{2}-\d{2}T/u.test(text)) return text.slice(0, 32);
+  return "";
+}
+
+function normalizeLocalDate(value) {
+  const text = String(value ?? "").trim();
+  const match = /^(\d{4})-(\d{2})-(\d{2})/u.exec(text);
+  return match ? `${match[1]}-${match[2]}-${match[3]}` : "";
+}
+
+function normalizeAcquisitionMethod(value) {
+  const method = String(value ?? "").trim();
+  if (["photo_exif_gps", "browser_geolocation", "manual_coordinates"].includes(method)) return method;
+  return "browser_geolocation";
+}
+
+function missingGoogleMapsResult(kind) {
+  return kind === "geocoding"
+    ? {
+        status: googleMapsApiKey ? "not_requested" : "missing_google_maps_api_key",
+        formattedAddress: "",
+        addressComponents: [],
+        countryCode: "",
+        regionCode: "",
+        types: []
+      }
+    : {
+        status: googleMapsApiKey ? "not_requested" : "missing_google_maps_api_key",
+        place: null,
+        details: null
+      };
+}
+
+function normalizeGoogleAddressComponent(component) {
+  if (!component) return null;
+  return {
+    longName: String(component.long_name ?? "").slice(0, 120),
+    shortName: String(component.short_name ?? "").slice(0, 32),
+    types: normalizeStringListForServer(component.types, 8)
+  };
+}
+
+function readAddressComponentShortName(components, type) {
+  const match = components.find((component) => Array.isArray(component.types) && component.types.includes(type));
+  return String(match?.short_name ?? "").slice(0, 12);
+}
+
+function inferGamePlaceType(types, label = "") {
+  const text = `${types.join(" ")} ${label}`.toLowerCase();
+  if (/(amusement|arcade|game|bowling|casino|night_club|movie_theater|entertainment)/u.test(text)) return "arcade";
+  if (/(cafe|coffee|bakery|restaurant|bar)/u.test(text)) return "cafe";
+  if (/(stadium|sports|gym|fitness|athletic|arena)/u.test(text)) return "stadium";
+  if (/(park|garden|campground|zoo)/u.test(text)) return "park";
+  if (/(beach|harbor|marina|pier)/u.test(text)) return "beach";
+  if (/(mountain|trail|natural_feature|hiking)/u.test(text)) return "mountain";
+  if (/(school|university|library)/u.test(text)) return "school";
+  if (/(office|finance|corporate|coworking)/u.test(text)) return "office";
+  if (/(train|subway|airport|bus_station|transit|parking)/u.test(text)) return "transit";
+  if (/(street|route|intersection|premise|store|shopping_mall)/u.test(text)) return "street";
+  if (/(indoor|lodging|museum|gallery)/u.test(text)) return "indoor";
+  return "neutral";
+}
+
+function inferTimeMoodFromMoment(capturedAt) {
+  const match = /T(\d{2}):/u.exec(String(capturedAt ?? ""));
+  const hour = match ? Number(match[1]) : Number.NaN;
+  if (!Number.isFinite(hour)) return "clear";
+  if (hour >= 20 || hour < 5) return "night";
+  if (hour >= 17 && hour < 20) return "dusk";
+  if (hour >= 10 && hour < 16) return "sunny";
+  return "clear";
+}
+
+function buildServerLocationCreativeTags(placeType, timeMood, placeTypes) {
+  const tags = [];
+  const placeTagMap = {
+    arcade: ["arcade neon venue", "interactive game-floor energy"],
+    cafe: ["warm cafe corner", "small venue atmosphere"],
+    stadium: ["competitive arena energy", "stadium spotlight"],
+    park: ["green public park", "open outdoor calm"],
+    beach: ["coastal public space", "sea-breeze atmosphere"],
+    mountain: ["highland endurance atmosphere"],
+    school: ["campus atmosphere"],
+    office: ["modern command-room workspace"],
+    transit: ["station transfer flow"],
+    street: ["urban street energy"],
+    indoor: ["indoor venue atmosphere"],
+    neutral: ["neutral training gate"]
+  };
+  const timeTagMap = {
+    sunny: ["sunlit action glow"],
+    night: ["night-scene contrast"],
+    dusk: ["dusk threshold mood"],
+    clear: ["clear everyday light"]
+  };
+  tags.push(...(placeTagMap[placeType] ?? placeTagMap.neutral));
+  tags.push(...(timeTagMap[timeMood] ?? []));
+  tags.push(...placeTypes.slice(0, 4).map((type) => `${type.replace(/_/gu, " ")} atmosphere`));
+  return mergeContextStrings(tags, 12);
+}
+
+function createHolidayTag(name) {
+  return String(name ?? "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/gu, "_")
+    .replace(/^_+|_+$/gu, "")
+    .slice(0, 40);
+}
+
+function createHolidayCreativeTags(holiday) {
+  const name = `${holiday.name} ${holiday.localName}`.toLowerCase();
+  if (/new year/u.test(name)) return ["new year countdown glow", "fresh-start motif"];
+  if (/christmas/u.test(name)) return ["winter festival lights", "gift-season warmth"];
+  if (/independence|national/u.test(name)) return ["public celebration energy", "festival color accents"];
+  if (/thanksgiving|harvest/u.test(name)) return ["harvest-season warmth", "gathering motif"];
+  if (/labor|labour/u.test(name)) return ["city holiday calm", "workshop rest-day motif"];
+  if (/memorial|remembrance/u.test(name)) return ["quiet commemorative atmosphere"];
+  return holiday.name || holiday.localName ? [`${String(holiday.name || holiday.localName).slice(0, 40)} motif`] : [];
+}
+
+function deriveCountryCodeFromTimezone(timezone) {
+  const value = String(timezone ?? "");
+  if (value.startsWith("America/")) return "US";
+  if (value === "Asia/Taipei") return "TW";
+  if (value === "Asia/Tokyo") return "JP";
+  if (value === "Asia/Seoul") return "KR";
+  if (value === "Europe/London") return "GB";
+  if (value.startsWith("Europe/")) return "DE";
+  if (value.startsWith("Australia/")) return "AU";
+  return "";
+}
+
+function normalizeStringListForServer(value, limit) {
+  const raw = Array.isArray(value) ? value : typeof value === "string" ? value.split(/[,，、;\n]/u) : [];
+  return mergeContextStrings(
+    raw
+      .map((item) => String(item ?? "").trim().replace(/\s+/gu, " ").slice(0, 64))
+      .filter(Boolean),
+    limit
+  );
+}
+
+function mergeContextStrings(values, limit) {
+  const seen = new Set();
+  const result = [];
+  for (const value of values ?? []) {
+    const text = String(value ?? "").trim();
+    if (!text) continue;
+    const key = text.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push(text);
+    if (result.length >= limit) break;
+  }
+  return result;
+}
+
+async function handleCardArt(req, res) {
+  const body = await readJsonBody(req, 16 * 1024 * 1024);
+  const request = readCardArtRequest(body, "gemini");
+  if (!request.image || !request.prompt) {
     sendJson(res, 400, { error: "bad_request", message: "imageDataUrl and prompt are required." });
     return;
   }
 
+  try {
+    const result = await generateCardArt(request.provider, request);
+    sendJson(res, 200, result);
+  } catch (error) {
+    sendProviderError(res, error, request.provider);
+  }
+}
+
+async function handleCardArtCompare(req, res) {
+  const body = await readJsonBody(req, 16 * 1024 * 1024);
+  const baseRequest = readCardArtRequest(body, "gemini");
+  if (!baseRequest.image || !baseRequest.prompt) {
+    sendJson(res, 400, { error: "bad_request", message: "imageDataUrl and prompt are required." });
+    return;
+  }
+
+  const providers = normalizeProviderList(body.providers);
+  if (!providers.length) {
+    sendJson(res, 400, { error: "bad_request", message: "providers must include gemini, openai, or comfy." });
+    return;
+  }
+
+  const startedAt = Date.now();
+  const candidates = await Promise.all(
+    providers.map(async (provider) => {
+      try {
+        return await generateCardArt(provider, { ...baseRequest, provider });
+      } catch (error) {
+        return {
+          ok: false,
+          provider,
+          error: error.code ?? "card_art_provider_failed",
+          message: error.message,
+          details: error.details ?? null
+        };
+      }
+    })
+  );
+
+  sendJson(res, 200, {
+    ok: candidates.some((candidate) => candidate.ok !== false && candidate.imageDataUrl),
+    providers,
+    latencyMs: Date.now() - startedAt,
+    candidates
+  });
+}
+
+async function handleGeminiCardArt(req, res) {
+  const body = await readJsonBody(req, 16 * 1024 * 1024);
+  const request = readCardArtRequest({ ...body, provider: "gemini" }, "gemini");
+  if (!request.image || !request.prompt) {
+    sendJson(res, 400, { error: "bad_request", message: "imageDataUrl and prompt are required." });
+    return;
+  }
+
+  try {
+    const result = await generateGeminiCardArt(request);
+    sendJson(res, 200, result);
+  } catch (error) {
+    sendProviderError(res, error, "gemini");
+  }
+}
+
+async function handleAiRetouch(req, res) {
+  const body = await readJsonBody(req, 12 * 1024 * 1024);
+  const request = readCardArtRequest({ ...body, provider: "openai" }, "openai");
+  if (!request.image || !request.prompt) {
+    sendJson(res, 400, { error: "bad_request", message: "imageDataUrl and prompt are required." });
+    return;
+  }
+
+  try {
+    const result = await generateOpenAiCardArt(request);
+    sendJson(res, 200, result);
+  } catch (error) {
+    sendProviderError(res, error, "openai");
+  }
+}
+
+function readCardArtRequest(body, defaultProvider = "gemini") {
+  return {
+    provider: normalizeCardArtProvider(body.provider ?? defaultProvider),
+    image: parseDataUrl(body.imageDataUrl),
+    prompt: String(body.prompt ?? "").slice(0, 12000),
+    negativePrompt: String(body.negativePrompt ?? "").slice(0, 2400),
+    aspectRatio: String(body.aspectRatio ?? geminiImageAspectRatio).slice(0, 12),
+    imageSize: String(body.imageSize ?? geminiImageSize).slice(0, 12),
+    size: String(body.size ?? "1024x1536").slice(0, 24),
+    quality: String(body.quality ?? "medium").slice(0, 24),
+    inputFidelity: String(body.inputFidelity ?? "high").slice(0, 24),
+    seed: Number.isFinite(Number(body.seed)) ? Number(body.seed) : randomSeed(),
+    width: Number.isFinite(Number(body.width)) ? Number(body.width) : 768,
+    height: Number.isFinite(Number(body.height)) ? Number(body.height) : 1024,
+    denoise: readNumber(body.denoise, Number(process.env.COMFYUI_DENOISE ?? 0.45)),
+    loraStrength: readNumber(body.loraStrength, Number(process.env.COMFYUI_FACEID_LORA_STRENGTH ?? 0.6)),
+    ipadapterWeight: readNumber(body.ipadapterWeight, Number(process.env.COMFYUI_IPADAPTER_WEIGHT ?? 1)),
+    faceidv2Weight: readNumber(body.faceidv2Weight, Number(process.env.COMFYUI_FACEIDV2_WEIGHT ?? 2))
+  };
+}
+
+function normalizeCardArtProvider(value) {
+  const provider = String(value ?? "")
+    .trim()
+    .toLocaleLowerCase()
+    .replace(/[^a-z0-9_-]+/gu, "");
+  if (["gemini", "google", "nanobanana", "nano_banana"].includes(provider)) return "gemini";
+  if (["openai", "ai", "gptimage", "gpt_image"].includes(provider)) return "openai";
+  if (["comfy", "comfyui"].includes(provider)) return "comfy";
+  return provider || "gemini";
+}
+
+function normalizeProviderList(value) {
+  const rawList = Array.isArray(value) ? value : String(value ?? "").split(",");
+  const providers = [];
+  for (const item of rawList) {
+    const provider = normalizeCardArtProvider(item);
+    if (!["gemini", "openai", "comfy"].includes(provider)) continue;
+    if (!providers.includes(provider)) providers.push(provider);
+    if (providers.length >= 3) break;
+  }
+  return providers;
+}
+
+async function generateCardArt(provider, request) {
+  const normalizedProvider = normalizeCardArtProvider(provider);
+  const startedAt = Date.now();
+  let result;
+  if (normalizedProvider === "gemini") {
+    result = await generateGeminiCardArt(request);
+  } else if (normalizedProvider === "openai") {
+    result = await generateOpenAiCardArt(request);
+  } else if (normalizedProvider === "comfy") {
+    result = await generateComfyCardArt(request);
+  } else {
+    throw createHttpError(400, "unsupported_card_art_provider", `Unsupported card art provider: ${provider}`);
+  }
+  return {
+    ok: true,
+    latencyMs: Date.now() - startedAt,
+    ...result
+  };
+}
+
+async function generateGeminiCardArt(request) {
+  if (!geminiApiKey) {
+    throw createHttpError(501, "missing_api_key", "GEMINI_API_KEY is not set. Set it in .env.local or Terminal before starting the server.");
+  }
+
+  const requestBody = {
+    model: geminiImageModel,
+    input: [
+      {
+        type: "text",
+        text: buildProviderCardArtPrompt(request.prompt, request.negativePrompt)
+      },
+      {
+        type: "image",
+        mime_type: request.image.mime,
+        data: request.image.buffer.toString("base64")
+      }
+    ],
+    response_format: {
+      type: "image",
+      mime_type: geminiImageMimeType,
+      aspect_ratio: request.aspectRatio,
+      image_size: request.imageSize
+    }
+  };
+
+  const response = await fetch(geminiImageUrl, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-goog-api-key": geminiApiKey
+    },
+    body: JSON.stringify(requestBody),
+    signal: AbortSignal.timeout(geminiImageTimeoutMs)
+  });
+
+  const result = parseJsonText(await response.text());
+  if (!response.ok) {
+    throw createHttpError(response.status, "gemini_error", "Gemini image generation failed.", result);
+  }
+
+  const outputImage = extractGeminiOutputImage(result);
+  if (!outputImage?.data) {
+    throw createHttpError(502, "missing_image", "Gemini image API did not return an image payload.", summarizeGeminiResponse(result));
+  }
+
+  const mimeType = outputImage.mimeType ?? "image/png";
+  const data = normalizeBase64ImageData(outputImage.data);
+  return {
+    imageDataUrl: data.startsWith("data:") ? data : `data:${mimeType};base64,${data}`,
+    provider: "gemini",
+    upstreamProvider: "google-gemini",
+    model: geminiImageModel,
+    interactionId: result.id ?? result.interaction?.id ?? null,
+    sourceField: outputImage.sourceField ?? null
+  };
+}
+
+async function generateOpenAiCardArt(request) {
+  if (!process.env.OPENAI_API_KEY) {
+    throw createHttpError(501, "missing_api_key", "OPENAI_API_KEY is not set. Set it in .env.local or Terminal before starting the server.");
+  }
+
   const form = new FormData();
   form.append("model", imageModel);
-  form.append("image", new Blob([image.buffer], { type: image.mime }), "source.png");
-  form.append("prompt", prompt);
-  form.append("size", body.size ?? "1024x1536");
-  form.append("quality", body.quality ?? "medium");
-  form.append("input_fidelity", body.inputFidelity ?? "high");
+  form.append("image", new Blob([request.image.buffer], { type: request.image.mime }), "source.png");
+  form.append("prompt", buildProviderCardArtPrompt(request.prompt, request.negativePrompt));
+  form.append("size", request.size);
+  form.append("quality", request.quality);
+  form.append("input_fidelity", request.inputFidelity);
 
   const response = await fetch("https://api.openai.com/v1/images/edits", {
     method: "POST",
     headers: {
       Authorization: `Bearer ${process.env.OPENAI_API_KEY}`
     },
-    body: form
+    body: form,
+    signal: AbortSignal.timeout(openAiImageTimeoutMs)
   });
 
-  const resultText = await response.text();
-  let result;
-  try {
-    result = JSON.parse(resultText);
-  } catch {
-    result = { raw: resultText };
-  }
-
+  const result = parseJsonText(await response.text());
   if (!response.ok) {
-    sendJson(res, response.status, {
-      error: "openai_error",
-      status: response.status,
-      details: result
-    });
-    return;
+    throw createHttpError(response.status, "openai_error", "OpenAI image generation failed.", result);
   }
 
   const first = result.data?.[0];
   if (first?.b64_json) {
-    sendJson(res, 200, {
+    return {
       imageDataUrl: `data:image/png;base64,${first.b64_json}`,
+      provider: "openai",
       model: imageModel,
       revisedPrompt: first.revised_prompt ?? null
-    });
-    return;
+    };
   }
 
   if (first?.url) {
-    const imageResponse = await fetch(first.url);
+    const imageResponse = await fetch(first.url, {
+      signal: AbortSignal.timeout(Math.min(openAiImageTimeoutMs, 30000))
+    });
     if (!imageResponse.ok) {
-      sendJson(res, 502, { error: "image_url_fetch_failed", status: imageResponse.status });
-      return;
+      throw createHttpError(502, "image_url_fetch_failed", "OpenAI returned an image URL that could not be fetched.", {
+        status: imageResponse.status
+      });
     }
     const contentType = imageResponse.headers.get("content-type") ?? "image/png";
     const arrayBuffer = await imageResponse.arrayBuffer();
-    const base64 = Buffer.from(arrayBuffer).toString("base64");
-    sendJson(res, 200, {
-      imageDataUrl: `data:${contentType};base64,${base64}`,
+    return {
+      imageDataUrl: `data:${contentType};base64,${Buffer.from(arrayBuffer).toString("base64")}`,
+      provider: "openai",
       model: imageModel,
       revisedPrompt: first.revised_prompt ?? null
-    });
-    return;
+    };
   }
 
-  sendJson(res, 502, { error: "missing_image", details: result });
+  throw createHttpError(502, "missing_image", "OpenAI image API did not return an image payload.", result);
+}
+
+async function generateComfyCardArt(request) {
+  if (!comfyWorkflowPath) {
+    throw createHttpError(501, "missing_comfy_workflow", "COMFYUI_WORKFLOW_PATH is not set. Export an API workflow JSON from ComfyUI and set the path in .env.local.", {
+      expectedPlaceholders: comfyPlaceholderContract()
+    });
+  }
+
+  const workflowTemplate = readComfyWorkflowTemplate();
+  const sourceDebug = await saveDebugSourceImage(request.image);
+  const upload = await uploadComfySourceImage(request.image);
+  const workflow = fillComfyWorkflowTemplate(workflowTemplate, {
+    sourceImage: upload.name,
+    prompt: request.prompt,
+    negativePrompt:
+      request.negativePrompt ||
+      "text, logo, watermark, extra people, identity document, low quality, distorted face, cropped head",
+    seed: request.seed,
+    width: request.width,
+    height: request.height,
+    denoise: request.denoise,
+    loraStrength: request.loraStrength,
+    ipadapterWeight: request.ipadapterWeight,
+    faceidv2Weight: request.faceidv2Weight
+  });
+  const promptResult = await submitComfyPrompt(workflow);
+  const output = await waitForComfyOutput(promptResult.promptId);
+  const imageDataUrl = await fetchComfyImageAsDataUrl(output.image);
+
+  return {
+    imageDataUrl,
+    provider: "comfy",
+    upstreamProvider: "comfyui",
+    model: "comfyui",
+    promptId: promptResult.promptId,
+    workflow: summarizeComfyWorkflow(),
+    source: {
+      mime: request.image.mime,
+      bytes: request.image.buffer.length,
+      debugPath: sourceDebug.relativePath,
+      comfyInput: upload.name
+    },
+    output: {
+      filename: output.image.filename,
+      subfolder: output.image.subfolder ?? "",
+      type: output.image.type ?? "output"
+    }
+  };
+}
+
+function sendProviderError(res, error, provider) {
+  sendJson(res, error.statusCode ?? 502, {
+    ok: false,
+    provider,
+    error: error.code ?? "card_art_provider_failed",
+    message: error.message,
+    details: error.details ?? null
+  });
 }
 
 async function serveStatic(pathname, res, headOnly) {
@@ -425,6 +1240,101 @@ function parseDataUrl(value) {
   return {
     mime: match[1] === "image/jpg" ? "image/jpeg" : match[1],
     buffer: Buffer.from(match[2], "base64")
+  };
+}
+
+function parseJsonText(text) {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return { raw: text };
+  }
+}
+
+function buildProviderCardArtPrompt(prompt, negativePrompt) {
+  return [
+    "Create one finished character portrait image for a battle-card game.",
+    "Use the attached source photo as the consenting subject and visual reference.",
+    "Preserve recognizable likeness or transferred visible cues according to the prompt branch.",
+    "Follow the project prompt below exactly. Do not add UI, card frame, readable text, labels, logos, watermarks, or stat panels.",
+    "The game app will render HP, ATK, DEF, COST, card frame, and text separately after this image returns.",
+    "Project prompt:",
+    prompt,
+    negativePrompt ? `Avoid these failures: ${negativePrompt}` : ""
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+}
+
+function extractGeminiOutputImage(payload) {
+  const directCandidates = [
+    ["output_image", payload?.output_image],
+    ["outputImage", payload?.outputImage],
+    ["interaction.output_image", payload?.interaction?.output_image],
+    ["interaction.outputImage", payload?.interaction?.outputImage]
+  ];
+  for (const [sourceField, value] of directCandidates) {
+    const image = normalizeGeminiImageBlock(value, sourceField);
+    if (image) return image;
+  }
+  return findGeminiImageBlock(payload);
+}
+
+function findGeminiImageBlock(value, path = "response", seen = new Set()) {
+  if (!value || typeof value !== "object") return null;
+  if (seen.has(value)) return null;
+  seen.add(value);
+
+  const normalized = normalizeGeminiImageBlock(value, path);
+  if (normalized) return normalized;
+
+  if (Array.isArray(value)) {
+    for (let index = 0; index < value.length; index += 1) {
+      const image = findGeminiImageBlock(value[index], `${path}[${index}]`, seen);
+      if (image) return image;
+    }
+    return null;
+  }
+
+  for (const [key, child] of Object.entries(value)) {
+    if (key === "input" || key === "request" || key === "prompt") continue;
+    const image = findGeminiImageBlock(child, `${path}.${key}`, seen);
+    if (image) return image;
+  }
+  return null;
+}
+
+function normalizeGeminiImageBlock(value, sourceField) {
+  if (!value || typeof value !== "object") return null;
+  const data =
+    value.data ??
+    value.b64_json ??
+    value.base64 ??
+    value.bytesBase64Encoded ??
+    value.inline_data?.data ??
+    value.inlineData?.data;
+  if (!data || typeof data !== "string") return null;
+  const type = value.type ?? value.mime_type ?? value.mimeType ?? value.inline_data?.mime_type ?? value.inlineData?.mimeType;
+  if (type && !/image\//iu.test(String(type)) && !/image/iu.test(String(value.type ?? ""))) return null;
+  return {
+    data,
+    mimeType: value.mime_type ?? value.mimeType ?? value.inline_data?.mime_type ?? value.inlineData?.mimeType ?? "image/png",
+    sourceField
+  };
+}
+
+function normalizeBase64ImageData(data) {
+  const value = String(data).trim();
+  const match = /^data:image\/[^;]+;base64,([\s\S]+)$/iu.exec(value);
+  return match ? match[1] : value;
+}
+
+function summarizeGeminiResponse(payload) {
+  if (!payload || typeof payload !== "object") return payload;
+  return {
+    id: payload.id ?? payload.interaction?.id ?? null,
+    keys: Object.keys(payload).slice(0, 24),
+    raw: payload.raw ? String(payload.raw).slice(0, 800) : undefined
   };
 }
 

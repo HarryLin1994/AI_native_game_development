@@ -68,12 +68,12 @@ iOS Safari / Mac Browser
 
 Mac local server
   -> Node adapter
-  -> ComfyUI
-  -> local open-source model files
+  -> Card Art Provider adapter
+  -> Gemini / Nano Banana API or OpenAI Image API
   -> generated card art
 ```
 
-The iPhone should first behave like the camera and game controller. The Mac should first behave like the local AI workstation. On-device iOS generation with Core ML is a later productization path, not the first MVP path.
+The iPhone should first behave like the camera and game controller. The Mac should first behave like the local analysis, prompt, and game-rule workstation. On-device iOS generation with Core ML is a later productization path, not the first MVP path.
 
 ## Target Pipeline
 
@@ -84,7 +84,7 @@ Source Photo
   -> optional Capture Context
   -> Character Spec
   -> prompt builder
-  -> local image generation adapter
+  -> image generation adapter
   -> generated character art
   -> card frame / UI composition
   -> Battle Card
@@ -157,6 +157,8 @@ raw camera snapshot, plain photo retouch
 
 This improves prompt discipline, but it does not solve model capability limits by itself.
 
+For Gemini / Nano Banana, keep avoid rules inside the positive instruction block. The project adapter sends one combined prompt that says what to create and what failures to avoid, such as "do not include readable text, UI, card frames, duplicate people, or distorted anatomy."
+
 Recommended prompt rule:
 
 ```text
@@ -176,19 +178,18 @@ Use this order for the project:
 
 ```text
 Canvas fallback
-  -> ComfyUI local workflow
-  -> SDXL Turbo / Lightning style image-to-image
-  -> IP-Adapter FaceID reference conditioning
+  -> unified Card Art Provider
+  -> Gemini / Nano Banana API or OpenAI Image API
+  -> source photo + Character Spec prompt
   -> Card Cover returned to the browser
 ```
 
-If the Mac Air cannot run that workflow acceptably, fall back to:
+If the API is unavailable, too expensive, or the key is missing, fall back to:
 
 ```text
 Canvas fallback
-  -> SD1.5 image-to-image smoke test
-  -> lower resolution
-  -> one image at a time
+  -> ComfyUI / SDXL historical adapter baseline
+  -> local model research only when explicitly reopened
 ```
 
 The full model pipeline and source links are recorded in [SYSTEM_PIPELINE.md](./SYSTEM_PIPELINE.md).
@@ -410,87 +411,72 @@ Next real upgrade:
 
 Do not spend another cycle only increasing denoise or rewriting prompts for this workflow. The remaining failures are workflow/model-control limits.
 
-### Flux Kontext GGUF Pivot on 2026-09-13
+### Gemini / Nano Banana API Pivot on 2026-09-13
 
 Decision:
 
 ```text
 SDXL Turbo / FaceID remains a historical baseline.
-The next highest-priority local experiment is Flux Kontext GGUF.
+ComfyUI Flux Kontext GGUF is paused because it was too slow on this Mac Air.
+MFLUX / MLX is not the MVP main path because local high-quality generation is still too heavy for this hardware.
+The next highest-priority image-generation experiment is a cloud Card Art Provider comparison, starting with Google Gemini / Nano Banana API and OpenAI Image API.
 ```
 
 Why:
 
 - The current SDXL Turbo + FaceID path can improve likeness, but it still behaves like photo retouching or unstable txt2img.
 - The game needs `photo + semantic tags + user context -> remade character art`, not a lightly edited photo.
-- `FLUX.1-Kontext-dev` is an image-to-image / editing model family, so it better matches the project's source-photo-to-character-art problem.
-- GGUF quantization is a practical fit for this Mac Air because it lowers model storage and memory pressure compared with full precision Flux.
+- The ComfyUI GGUF implementation was not acceptable for interaction speed on this machine. A 4-step `880x1184` preview took about 12m34s.
+- The Mac Air should spend its budget on local VLM/OCR/prompt/game rules, not on heavy image diffusion.
+- Gemini / Nano Banana and OpenAI image editing are better aligned with the current MVP need: high-quality image editing/generation from a reference photo plus text prompt.
 
 Primary research target:
 
 ```text
-Main model:
-  QuantStack/FLUX.1-Kontext-dev-GGUF
-  flux1-kontext-dev-Q4_K_M.gguf
-  size: about 6.9 GB
-  license: flux-1-dev-non-commercial-license
-
-Text encoder:
-  city96/t5-v1_1-xxl-encoder-gguf
-  t5-v1_1-xxl-encoder-Q4_K_M.gguf
-  size: about 2.9 GB
-  license: Apache 2.0
-
-Additional Flux components:
-  CLIP-L text encoder
-  AE/VAE
-```
-
-Installed local support:
-
-```text
-.local-tools/ComfyUI/custom_nodes/ComfyUI-GGUF
-.local-tools/comfy-venv: gguf dependency installed
-```
-
-Space warning:
-
-```text
-Current free disk during pivot: about 15 GB.
-New Flux Kontext Q4_K_M experiment needs about 10.4 GB before runtime cache/swap.
-Do not download the full set while only 15 GB is free.
-```
-
-Recommended cleanup before download:
-
-```text
-If SDXL is no longer needed, delete the old SDXL local research models:
-  .local-tools/ComfyUI/models/checkpoints/sd_xl_turbo_1.0_fp16.safetensors  about 6.5 GB
-  .local-tools/ComfyUI/models/clip_vision/CLIP-ViT-H-14-laion2B-s32B-b79K.safetensors  about 2.4 GB
-  .local-tools/ComfyUI/models/ipadapter/ip-adapter-faceid-plusv2_sdxl.bin  about 1.4 GB
-  .local-tools/ComfyUI/models/loras/ip-adapter-faceid-plusv2_sdxl_lora.safetensors  about 368 MB
-```
-
-These files should not be deleted automatically without an explicit user decision because they are the current reproducible SDXL/FaceID baseline.
-
-Next workflow target:
-
-```text
 Source Photo
   -> VLM Visible Semantic Tags
-  -> User context fields
-  -> Flux Kontext image-to-image workflow
-  -> Character art layer
-  -> App-rendered card frame and stats
+  -> Character Spec prompt
+  -> /api/card-art
+  -> provider: gemini | openai
+  -> generated character art layer
 ```
 
-Acceptance for the first Flux Kontext smoke test:
+Required app support:
+
+```text
+GEMINI_API_KEY
+GEMINI_IMAGE_MODEL=nano-banana-pro-preview
+OPENAI_API_KEY
+OPENAI_IMAGE_MODEL=gpt-image-1
+GET /?imageMode=gemini
+GET /?imageMode=openai
+POST /api/card-art
+POST /api/card-art-compare
+```
+
+Default output request:
+
+```text
+aspect ratio: 3:4
+image size: 1K
+```
+
+Acceptance for the first provider smoke test:
 
 - The result must keep recognizable facial identity better than SDXL txt2img.
 - The result must remake the scene and role more strongly than SDXL FaceID img2img.
 - The result must avoid fake card borders, fake UI panels, and readable nonsense text.
 - Human anatomy must remain believable at card scale.
-- The output can be slow; quality is more important than speed for this experiment.
+- Latency should be acceptable for a generate-and-review MVP loop.
+
+Implementation note:
+
+```text
+The existing VLM, face/identity descriptor, semantic tags, Character Spec, and prompt builder remain valid.
+Only the final image-generation adapter changes.
+```
+
+比喻：前面的偵查員、編劇、角色設定都不換；只是把最後的畫師從本地模型換成雲端 API。
 
 ## Model Capability Boundary
 
@@ -578,20 +564,38 @@ Source:
 
 - https://drawthings.ai/
 
-### 3. MFLUX as Apple Silicon Native Option
+### 3. Cloud Card Art Providers
 
-MFLUX is interesting because it is built around Apple MLX and targets local generation on Mac. It can be a second research lane if ComfyUI is too heavy or if we want a more Mac-native pipeline.
+Gemini / Nano Banana and OpenAI are the active quality research lanes because local generation is too heavy for the current Mac Air.
 
-Use it later for:
+Use it now for:
 
-- Apple Silicon optimized generation
-- command-line experiments
-- quantized models
-- image-to-image workflows
+- source-photo image editing/generation
+- stronger portrait likeness than the local SDXL baseline
+- faster MVP iteration than local Flux-family model tuning
+- keeping Mac resources focused on VLM tags, prompt building, rules, and card UI
+- side-by-side provider comparison using the same source photo and prompt
 
-Source:
+Current MVP route:
 
-- https://github.com/mflux-community/mflux
+```text
+POST /api/card-art
+POST /api/card-art-compare
+```
+
+Current first target:
+
+```text
+GEMINI_IMAGE_MODEL=nano-banana-pro-preview
+OPENAI_IMAGE_MODEL=gpt-image-1
+aspect ratio: 3:4
+image size: 1K
+```
+
+Sources:
+
+- https://ai.google.dev/gemini-api/docs/image-generation
+- https://platform.openai.com/docs/api-reference/images/createEdit
 
 ## Candidate Models
 

@@ -5,8 +5,9 @@
 目前圖像路線：
 
 - 本機預覽：不需要 API Key，所有圖片處理都在瀏覽器用 Canvas 完成。
-- ComfyUI 本機 AI 生圖：正式本地研究方向。SDXL Turbo / FaceID 已降為歷史 baseline；下一個最高優先實驗是 Flux Kontext GGUF。
-- 外部 OpenAI 修飾：舊測試路線，需要 `OPENAI_API_KEY`，照片會送到 OpenAI Image Edit API。
+- Google Gemini / Nano Banana API：目前最高優先生圖方向。走統一 `Card Art Provider` 介面。
+- OpenAI 圖片 API：可用同一個 `Card Art Provider` 介面做 A/B test，比較 likeness、語意轉換、速度與成本。
+- ComfyUI 本機 AI 生圖：保留為 adapter baseline 與歷史測試路線。SDXL Turbo / FaceID 已降為歷史 baseline；ComfyUI GGUF / Flux Kontext 因這台 Mac Air 上速度太慢，暫停。
 
 ## Run
 
@@ -17,6 +18,17 @@ For true AI mode, create `.env.local` with:
 ```text
 OPENAI_API_KEY=your_api_key_here
 OPENAI_IMAGE_MODEL=gpt-image-1
+OPENAI_IMAGE_TIMEOUT_MS=120000
+GEMINI_API_KEY=your_api_key_here
+GEMINI_IMAGE_MODEL=nano-banana-pro-preview
+GEMINI_IMAGE_TIMEOUT_MS=120000
+GEMINI_IMAGE_ASPECT_RATIO=3:4
+GEMINI_IMAGE_SIZE=1K
+GEMINI_IMAGE_MIME_TYPE=image/jpeg
+GOOGLE_MAPS_API_KEY=your_google_maps_api_key_here
+GOOGLE_MAPS_TIMEOUT_MS=8000
+HOLIDAY_API_BASE_URL=https://date.nager.at/api/v3
+HOLIDAY_API_TIMEOUT_MS=8000
 COMFYUI_URL=http://127.0.0.1:8188
 COMFYUI_TIMEOUT_MS=3000
 COMFYUI_WORKFLOW_PATH=/absolute/path/to/comfyui-api-workflow.json
@@ -54,6 +66,8 @@ The MVP can route prompt generation by character form branch without changing th
 ```text
 http://127.0.0.1:5173/?form=humanlike
 http://127.0.0.1:5173/?form=animalized.cat
+http://127.0.0.1:5173/?imageMode=gemini
+http://127.0.0.1:5173/?imageMode=openai
 ```
 
 Current branches:
@@ -73,7 +87,7 @@ npm run comfy:start
 
 On this Mac, the script starts ComfyUI with `--fp32-vae` to avoid near-black SDXL Turbo outputs on Apple MPS.
 
-Current local image-generation research priority is recorded in [docs/LOCAL_IMAGE_GENERATION.md](docs/LOCAL_IMAGE_GENERATION.md). As of the latest direction, the next serious experiment is `FLUX.1-Kontext-dev-GGUF Q4_K_M` plus `t5-v1_1-xxl-encoder Q4_K_M`, but the model download should wait until there is enough free disk space.
+Current image-generation priority is recorded in [docs/LOCAL_IMAGE_GENERATION.md](docs/LOCAL_IMAGE_GENERATION.md). As of the latest direction, ComfyUI remains useful for adapter checks, but the active quality route has moved to cloud provider comparison with Gemini / Nano Banana and OpenAI because local Flux-family generation was not fast enough on this Mac Air.
 
 Then check:
 
@@ -92,6 +106,79 @@ The smoke output is written to:
 ```text
 .local-tools/comfy-smoke-output.png
 ```
+
+### Cloud Card Art Providers
+
+Gemini / Nano Banana and OpenAI are the current cloud image-generation lanes.
+
+Enable it with:
+
+```text
+GEMINI_API_KEY=your_api_key_here
+GEMINI_IMAGE_MODEL=nano-banana-pro-preview
+OPENAI_API_KEY=your_api_key_here
+OPENAI_IMAGE_MODEL=gpt-image-1
+```
+
+Then open:
+
+```text
+http://127.0.0.1:5173/?imageMode=gemini
+http://127.0.0.1:5173/?imageMode=openai
+```
+
+Pipeline:
+
+```text
+Browser photo
+  -> automatic Capture/Event Context
+  -> VLM semantic tags and Character Spec
+  -> POST /api/card-art
+  -> Gemini Image API or OpenAI Image API
+  -> browser receives generated character art
+  -> app renders card frame, stats, and text
+```
+
+Automatic Capture/Event Context:
+
+```text
+Uploaded JPEG EXIF GPS/time or Browser Geolocation
+  -> POST /api/capture-context
+  -> Google reverse geocoding and Places Nearby Search when GOOGLE_MAPS_API_KEY is set
+  -> internal location-hook fallback when no Maps key exists
+  -> Nager.Date US public holiday lookup using generation-time current date
+  -> Character Spec prompt hooks
+```
+
+Character setup fields now use VLM Creative Roll plus reviewable VLM-auto fields. The automatic context resolver can feed safe place/time/event context into the roll and deterministic rule tables. For the current MVP, holiday context is US-only and based on the real-world current date, not old photo EXIF dates. It does not infer sensitive creative context, and AI providers do not directly decide final game stats.
+When `GOOGLE_MAPS_API_KEY` is missing, the fallback does not create a Google Maps URL from coordinates; it keeps the user inside the game flow.
+
+Unified request shape:
+
+```json
+{
+  "provider": "gemini",
+  "imageDataUrl": "data:image/png;base64,...",
+  "prompt": "card art prompt",
+  "negativePrompt": "text, UI, card frame"
+}
+```
+
+Provider comparison endpoint:
+
+```text
+POST /api/card-art-compare
+providers: ["gemini", "openai"]
+```
+
+Default output request:
+
+```text
+aspect ratio: 3:4
+image size: 1K
+```
+
+If a provider fails or the key is missing, the app falls back to the local Canvas preview.
 
 ## ComfyUI Smoke Test
 
@@ -116,12 +203,29 @@ The MVP has a local VLM adapter for generating `Visible Semantic Tags` from the 
 ```text
 Browser photo
   -> browser creates center subject crop
-  -> POST /api/vision-tags
+  -> POST /api/vision-tags automatically after upload/capture
   -> subject focus: center primary subject
   -> Ollama /api/chat
   -> JSON semantic tag groups
   -> browser fills VLM semantic candidates
 ```
+
+The same local VLM runtime now also has a character setup candidate endpoint:
+
+```text
+Browser photo + analysis + capture/event context
+  -> POST /api/questionnaire-candidates
+  -> VLM Creative Roll
+  -> 4 user-choice candidates each for ageImpression, values, weakness
+  -> 4 system-story candidates for storyEvent
+  -> future modal lets the user choose ageImpression, values, weakness
+  -> system seed chooses one storyEvent
+  -> VLM-auto fields for role, personality, specialty, combatStyle, signatureItem, cardMood
+```
+
+If the VLM is unavailable, `/api/questionnaire-candidates` returns deterministic safe fallback candidates so the game flow can continue. The fallback is for development continuity; the target product behavior is still VLM-first.
+
+After upload/capture, the MVP asks for a short character name. Empty input defaults to `路人`, and generated card names must include that name.
 
 Default configuration:
 
@@ -203,7 +307,7 @@ It expects this checkpoint in ComfyUI:
 .local-tools/ComfyUI/models/checkpoints/sd_xl_turbo_1.0_fp16.safetensors
 ```
 
-SDXL Turbo is retained as a local research/smoke-test baseline. Current quality research has moved toward Flux Kontext GGUF because SDXL Turbo / FaceID did not satisfy the project's likeness-plus-remake goal. Re-check every model license before any commercial release.
+SDXL Turbo is retained as a local research/smoke-test baseline. Current quality research has moved to the unified cloud provider path because SDXL Turbo / FaceID did not satisfy the project's likeness-plus-remake goal, and local Flux-family generation was too slow on this Mac Air. Re-check every model license before any commercial release.
 
 Observed on this Mac Air:
 
@@ -223,13 +327,15 @@ Output: 768x1024 PNG
 - iOS and Mac validation through the browser, with Mac acting as the local AI workstation.
 - Canvas-based visual feature extraction: dominant colors, brightness, contrast, saturation, edge density, center focus, symmetry, and optional OCR text seed.
 - VLM semantic tag candidate endpoint at `/api/vision-tags`, using local Ollama when available.
+- Unified card-art endpoint at `/api/card-art`, supporting `gemini`, `openai`, and `comfy`.
+- Provider comparison endpoint at `/api/card-art-compare`, supporting explicit A/B runs such as `["gemini", "openai"]`.
 - Hidden/default generation profile for the current card-first UI.
 - Deterministic character spec generation from image features.
 - True AI retouched portrait through the local Node proxy when `OPENAI_API_KEY` is configured.
 - ComfyUI status check endpoint at `/api/comfy-status`.
 - ComfyUI card-art endpoint at `/api/comfy-card-art`, gated by `COMFYUI_WORKFLOW_PATH`.
 - FaceID-conditioned ComfyUI workflows under `docs/comfyui-workflows/` for historical likeness tests.
-- ComfyUI-GGUF installed under `.local-tools/ComfyUI/custom_nodes/ComfyUI-GGUF` for the next Flux Kontext GGUF experiment.
+- ComfyUI-GGUF installed under `.local-tools/ComfyUI/custom_nodes/ComfyUI-GGUF` as a paused research path; the GGUF model files were removed after the speed test.
 - Local Canvas preview fallback when AI is not configured.
 - Battle card cover generated locally with Canvas.
 - Local character library saved in `localStorage`.
@@ -242,7 +348,7 @@ Output: 768x1024 PNG
 - Server-authoritative battle validation.
 - Account system and multiplayer matchmaking.
 - Real OCR engine integration.
-- A committed production ComfyUI workflow and downloaded image-generation models.
+- A committed production image-generation workflow and approved downloaded image-generation models.
 - On-device iOS image generation.
 
 The MVP intentionally avoids identity recognition. Later phases should use consent-based, privacy-first analysis and only store required non-sensitive features unless a player explicitly chooses otherwise.

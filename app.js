@@ -1,8 +1,46 @@
+import {
+  CARD_ART_PROMPT_VERSION,
+  CHARACTER_FORM_BRANCHES,
+  DEFAULT_CHARACTER_FORM_BRANCH,
+  ageProfiles,
+  archetypes,
+  cardStatLabels,
+  combatStyleProfiles,
+  eventCombatProfiles,
+  metricLabels,
+  occupationRules,
+  placeTypeProfiles,
+  rarityTable,
+  seasonCombatProfiles,
+  statLabels,
+  timeMoodProfiles,
+  valueProfiles,
+  weaknessRules
+} from "./src/card-generation/rule-data.js";
+import {
+  getEvolutionMilestonesReached,
+  MAX_CARD_LEVEL,
+  PROGRESSION_LOCK_REASONS
+} from "./src/progression/progression-rule-data.js";
+import {
+  buildCharacterSpecContexts,
+  formatPromptHooksForImageModel
+} from "./src/card-generation/character-spec.js";
+import {
+  createRuntimeCaptureMoment,
+  extractPhotoMetadataFromFile
+} from "./src/capture-context/photo-metadata.js";
+import {
+  chooseSkillBranch,
+  createPendingBranchChoice,
+  createInitialProgressionState,
+  normalizeProgressionState,
+  validateProgressionState
+} from "./src/progression/progression-state.js";
+import { buildSkillBranchOptions } from "./src/progression/skill-branch-options.js";
+
 const STORAGE_KEY = "photo-character-lab.characters.v1";
 const DEFAULT_SUBJECT_FOCUS = "center_primary_subject";
-const DEFAULT_CHARACTER_FORM_BRANCH = "humanlike";
-const CHARACTER_FORM_BRANCHES = ["humanlike", "animalized.cat"];
-const CARD_ART_PROMPT_VERSION = "card-art-prompt-v2.4-form-branches";
 
 const els = {
   imageInput: document.querySelector("#imageInput"),
@@ -44,7 +82,13 @@ const els = {
   playerFighter: document.querySelector("#playerFighter"),
   enemyFighter: document.querySelector("#enemyFighter"),
   battleState: document.querySelector("#battleState"),
-  battleLog: document.querySelector("#battleLog")
+  battleLog: document.querySelector("#battleLog"),
+  branchChoiceModal: document.querySelector("#branchChoiceModal"),
+  branchChoiceTitle: document.querySelector("#branchChoiceTitle"),
+  branchChoiceSubtitle: document.querySelector("#branchChoiceSubtitle"),
+  branchChoiceSlot: document.querySelector("#branchChoiceSlot"),
+  branchChoiceOptions: document.querySelector("#branchChoiceOptions"),
+  branchChoiceNote: document.querySelector("#branchChoiceNote")
 };
 
 const state = {
@@ -55,326 +99,24 @@ const state = {
   selectedCardId: null,
   stream: null,
   battle: null,
-  reroll: 0
+  reroll: 0,
+  sourceMetadata: null,
+  captureContextResolution: null,
+  captureContextPromise: null,
+  vlmAnalysisPromise: null,
+  questionnaireCandidates: null,
+  selectedQuestionnaireCandidates: {},
+  characterName: "路人",
+  activeBranchChoiceKey: "",
+  activeBranchChoiceCardId: null,
+  activeBranchChoiceId: null
 };
-
-const archetypes = [
-  {
-    key: "flare",
-    name: "焰行者",
-    element: "Ember",
-    accent: "#e46f4f",
-    stat: "power",
-    verbs: ["灼擊", "爆裂", "壓陣"]
-  },
-  {
-    key: "volt",
-    name: "脈衝客",
-    element: "Voltage",
-    accent: "#d8c64e",
-    stat: "speed",
-    verbs: ["閃步", "連鎖", "超載"]
-  },
-  {
-    key: "veil",
-    name: "影幕使",
-    element: "Umbra",
-    accent: "#9d83e6",
-    stat: "focus",
-    verbs: ["遮斷", "反制", "潛伏"]
-  },
-  {
-    key: "aegis",
-    name: "鐵壁衛",
-    element: "Steel",
-    accent: "#8aa0b6",
-    stat: "guard",
-    verbs: ["格擋", "固守", "迴響"]
-  },
-  {
-    key: "tide",
-    name: "潮汐術士",
-    element: "Tide",
-    accent: "#58aeca",
-    stat: "focus",
-    verbs: ["回流", "淨化", "導引"]
-  },
-  {
-    key: "wild",
-    name: "荒野契者",
-    element: "Terra",
-    accent: "#58c07b",
-    stat: "luck",
-    verbs: ["生長", "追獵", "契印"]
-  }
-];
-
-const rarityTable = [
-  { key: "N", name: "Normal", threshold: 0, bonus: 0 },
-  { key: "R", name: "Rare", threshold: 55, bonus: 8 },
-  { key: "SR", name: "Super Rare", threshold: 72, bonus: 15 },
-  { key: "UR", name: "Ultra Rare", threshold: 86, bonus: 24 }
-];
-
-const statLabels = {
-  power: "力量",
-  speed: "速度",
-  guard: "防禦",
-  focus: "專注",
-  luck: "幸運"
-};
-
-const cardStatLabels = {
-  hp: "HP",
-  atk: "ATK",
-  def: "DEF",
-  cost: "COST"
-};
-
-const metricLabels = {
-  brightness: "亮度",
-  contrast: "對比",
-  saturation: "色彩",
-  edgeDensity: "線條",
-  centerFocus: "中心感",
-  symmetry: "對稱",
-  textSignal: "文字"
-};
-
-const ageProfiles = {
-  teen: {
-    label: "少年",
-    statMods: { speed: 8, luck: 5, focus: -2 },
-    trait: "成長潛能",
-    skillWord: "閃耀"
-  },
-  young_adult: {
-    label: "青年",
-    statMods: { speed: 4, power: 4, focus: 2 },
-    trait: "上升期",
-    skillWord: "突破"
-  },
-  adult: {
-    label: "成年",
-    statMods: { power: 4, guard: 4, focus: 4 },
-    trait: "實戰經驗",
-    skillWord: "穩擊"
-  },
-  veteran: {
-    label: "資深",
-    statMods: { guard: 7, focus: 7, speed: -2 },
-    trait: "老練判斷",
-    skillWord: "沉著"
-  },
-  legend: {
-    label: "傳奇",
-    statMods: { power: 6, guard: 6, focus: 6, luck: 4 },
-    trait: "傳奇氣場",
-    skillWord: "終式"
-  }
-};
-
-const combatStyleProfiles = {
-  auto: { label: "自動判定", statMods: {}, preferredStat: null, role: null, trait: null, skillWord: null },
-  striker: {
-    label: "攻擊壓制",
-    statMods: { power: 12, speed: 3, guard: -3 },
-    preferredStat: "power",
-    role: "Burst Striker",
-    trait: "壓制火力",
-    skillWord: "強襲"
-  },
-  duelist: {
-    label: "速度連擊",
-    statMods: { speed: 12, luck: 3, guard: -3 },
-    preferredStat: "speed",
-    role: "Tempo Duelist",
-    trait: "連擊節奏",
-    skillWord: "連閃"
-  },
-  guardian: {
-    label: "防禦守護",
-    statMods: { guard: 12, focus: 4, speed: -3 },
-    preferredStat: "guard",
-    role: "Frontline Defender",
-    trait: "守護核心",
-    skillWord: "壁壘"
-  },
-  controller: {
-    label: "控制干擾",
-    statMods: { focus: 12, luck: 2, power: -2 },
-    preferredStat: "focus",
-    role: "Control Caster",
-    trait: "節奏控制",
-    skillWord: "封鎖"
-  },
-  trickster: {
-    label: "幸運奇襲",
-    statMods: { luck: 12, speed: 4, guard: -2 },
-    preferredStat: "luck",
-    role: "Chaos Tactician",
-    trait: "奇襲手段",
-    skillWord: "逆轉"
-  }
-};
-
-const valueProfiles = {
-  growth: {
-    label: "成長",
-    statMods: { focus: 2, luck: 2 },
-    trait: "成長意志",
-    skillWord: "成長",
-    archetypeBias: { wild: 0.12, tide: 0.1 }
-  },
-  friendship: {
-    label: "友情",
-    statMods: { focus: 4, guard: 4 },
-    trait: "羈絆核心",
-    skillWord: "羈絆",
-    archetypeBias: { tide: 0.22, aegis: 0.18 }
-  },
-  freedom: {
-    label: "自由",
-    statMods: { speed: 6, luck: 3, guard: -1 },
-    trait: "自由步伐",
-    skillWord: "疾行",
-    archetypeBias: { volt: 0.25, wild: 0.12 }
-  },
-  order: {
-    label: "秩序",
-    statMods: { guard: 5, focus: 4, speed: -1 },
-    trait: "秩序框架",
-    skillWord: "律令",
-    archetypeBias: { aegis: 0.22, veil: 0.14 }
-  },
-  victory: {
-    label: "勝利",
-    statMods: { power: 6, speed: 2, guard: -1 },
-    trait: "勝利執念",
-    skillWord: "決勝",
-    archetypeBias: { flare: 0.24, volt: 0.1 }
-  },
-  knowledge: {
-    label: "知識",
-    statMods: { focus: 7, luck: 1 },
-    trait: "知識索引",
-    skillWord: "洞察",
-    archetypeBias: { veil: 0.22, volt: 0.16 }
-  },
-  protection: {
-    label: "守護",
-    statMods: { guard: 7, focus: 2, speed: -1 },
-    trait: "守護誓約",
-    skillWord: "守護",
-    archetypeBias: { aegis: 0.28, tide: 0.12 }
-  }
-};
-
-const placeTypeProfiles = {
-  neutral: { label: "中性訓練場", statMods: {}, trait: "訓練場出身", archetypeBias: {} },
-  indoor: { label: "室內", statMods: { focus: 2, guard: 1 }, trait: "室內戰術", archetypeBias: { veil: 0.14, aegis: 0.1 } },
-  street: { label: "街道", statMods: { speed: 3, luck: 1 }, trait: "街頭節奏", archetypeBias: { volt: 0.18, veil: 0.1 } },
-  school: { label: "學校", statMods: { focus: 4, luck: 1 }, trait: "學院迴路", archetypeBias: { tide: 0.12, veil: 0.12 } },
-  office: { label: "辦公室", statMods: { focus: 3, guard: 2 }, trait: "指令中樞", archetypeBias: { volt: 0.14, aegis: 0.12 } },
-  park: { label: "公園", statMods: { luck: 3, guard: 1 }, trait: "綠地呼吸", archetypeBias: { wild: 0.2, tide: 0.1 } },
-  beach: { label: "海邊", statMods: { focus: 2, luck: 2 }, trait: "潮線記憶", archetypeBias: { tide: 0.28 } },
-  mountain: { label: "山區", statMods: { guard: 3, power: 2 }, trait: "山脊耐性", archetypeBias: { wild: 0.22, aegis: 0.14 } },
-  transit: { label: "交通場所", statMods: { speed: 4, focus: 1 }, trait: "轉乘步法", archetypeBias: { volt: 0.22 } }
-};
-
-const timeMoodProfiles = {
-  clear: { label: "清晰日常", statMods: { focus: 1, guard: 1 }, trait: "清晰基準", archetypeBias: {} },
-  sunny: { label: "晴朗", statMods: { power: 2, speed: 1 }, trait: "日光脈動", archetypeBias: { flare: 0.16, wild: 0.08 } },
-  rainy: { label: "雨天", statMods: { focus: 2, guard: 2 }, trait: "雨幕節奏", archetypeBias: { tide: 0.22, veil: 0.08 } },
-  night: { label: "夜晚", statMods: { focus: 2, luck: 2 }, trait: "夜行視野", archetypeBias: { veil: 0.2, volt: 0.08 } },
-  dusk: { label: "黃昏", statMods: { power: 1, focus: 2 }, trait: "黃昏臨界", archetypeBias: { flare: 0.12, veil: 0.12 } },
-  neon: { label: "霓虹", statMods: { speed: 3, focus: 1 }, trait: "霓虹訊號", archetypeBias: { volt: 0.24, veil: 0.1 } },
-  quiet: { label: "安靜", statMods: { focus: 3, guard: 1 }, trait: "靜默判讀", archetypeBias: { tide: 0.12, veil: 0.1 } },
-  chaotic: { label: "混亂", statMods: { luck: 4, speed: 1, guard: -1 }, trait: "混線反應", archetypeBias: { wild: 0.18, volt: 0.12 } }
-};
-
-const weaknessRules = [
-  {
-    patterns: ["過度分析", "想太多", "猶豫", "overthink"],
-    statMods: { focus: 6, speed: -2 },
-    trait: "思考負荷",
-    tradeoff: "專注提高，但出手節奏偏慢。"
-  },
-  {
-    patterns: ["衝動", "急躁", "莽撞", "impulsive"],
-    statMods: { power: 5, guard: -2 },
-    trait: "衝鋒代價",
-    tradeoff: "開場火力提高，但防禦較不穩。"
-  },
-  {
-    patterns: ["失去隊友", "隊友", "孤單", "alone"],
-    statMods: { guard: 4, focus: 2, luck: -1 },
-    trait: "羈絆壓力",
-    tradeoff: "隊友受傷時更強，但單獨作戰較保守。"
-  },
-  {
-    patterns: ["消耗", "疲勞", "體力", "高耗能"],
-    statMods: { power: 4, focus: 4, speed: -2 },
-    trait: "高耗能核心",
-    tradeoff: "技能威力提高，但需要冷卻與代價。"
-  },
-  {
-    patterns: ["脆弱", "不耐打", "怕痛", "fragile"],
-    statMods: { speed: 4, luck: 2, guard: -3 },
-    trait: "玻璃步伐",
-    tradeoff: "迴避與爆發提高，但承受傷害能力下降。"
-  }
-];
-
-const occupationRules = [
-  {
-    patterns: ["工程", "程式", "developer", "engineer", "研究", "科學", "資料"],
-    statMods: { focus: 10, guard: 2 },
-    trait: "解析職能",
-    skillWord: "解析"
-  },
-  {
-    patterns: ["醫", "護理", "治療", "藥", "心理"],
-    statMods: { focus: 7, guard: 7 },
-    trait: "支援職能",
-    skillWord: "修復"
-  },
-  {
-    patterns: ["學生", "老師", "教授", "教育"],
-    statMods: { focus: 8, luck: 3 },
-    trait: "學習迴路",
-    skillWord: "研習"
-  },
-  {
-    patterns: ["設計", "藝術", "音樂", "創作", "攝影"],
-    statMods: { luck: 7, focus: 5 },
-    trait: "創作感知",
-    skillWord: "構圖"
-  },
-  {
-    patterns: ["運動", "健身", "球", "舞", "武術"],
-    statMods: { power: 7, speed: 7 },
-    trait: "運動底盤",
-    skillWord: "爆發"
-  },
-  {
-    patterns: ["警", "軍", "消防", "保全", "救援"],
-    statMods: { guard: 9, power: 5 },
-    trait: "前線紀律",
-    skillWord: "制壓"
-  },
-  {
-    patterns: ["老闆", "管理", "經理", "pm", "企劃", "創業"],
-    statMods: { focus: 6, guard: 5, luck: 3 },
-    trait: "指揮職能",
-    skillWord: "調度"
-  }
-];
 
 function init() {
   bindEvents();
   renderDeck();
   renderBattle();
+  state.captureContextPromise = refreshAutomaticCaptureContext("startup");
 }
 
 function bindEvents() {
@@ -420,6 +162,7 @@ function bindEvents() {
   els.skillOneButton.addEventListener("click", () => playerAction({ type: "skill", index: 0 }));
   els.skillTwoButton.addEventListener("click", () => playerAction({ type: "skill", index: 1 }));
   els.guardButton.addEventListener("click", () => playerAction({ type: "guard" }));
+  els.branchChoiceOptions.addEventListener("click", handleBranchChoiceClick);
 }
 
 function markProfileChanged() {
@@ -436,7 +179,8 @@ function hasPhotoConsent() {
 function readConfiguredImageMode(defaultMode) {
   const params = new URLSearchParams(window.location.search);
   const requestedMode = params.get("imageMode") ?? localStorage.getItem("photo-character-lab.imageMode") ?? defaultMode;
-  return ["local", "comfy", "ai"].includes(requestedMode) ? requestedMode : defaultMode;
+  if (requestedMode === "ai") return "openai";
+  return ["local", "gemini", "openai", "comfy"].includes(requestedMode) ? requestedMode : defaultMode;
 }
 
 function readConfiguredCharacterForm(defaultBranch) {
@@ -447,6 +191,17 @@ function readConfiguredCharacterForm(defaultBranch) {
     localStorage.getItem("photo-character-lab.characterForm") ??
     defaultBranch;
   return normalizeCharacterFormBranch(requestedBranch);
+}
+
+function promptForCharacterName() {
+  const currentName = state.characterName === "路人" ? "" : state.characterName;
+  const answer = window.prompt("輸入角色名字", currentName || "路人");
+  state.characterName = normalizeCharacterName(answer);
+}
+
+function normalizeCharacterName(value) {
+  const name = normalizeFreeText(String(value ?? ""), 12);
+  return name || "路人";
 }
 
 function normalizeCharacterFormBranch(value) {
@@ -463,8 +218,12 @@ async function handleImageUpload(event) {
   if (!file) return;
   try {
     await stopCamera();
+    state.sourceMetadata = await extractPhotoMetadataFromFile(file);
     const dataUrl = await readFileAsDataUrl(file);
     await setSourceImage(dataUrl);
+    promptForCharacterName();
+    state.captureContextPromise = refreshAutomaticCaptureContext("source_photo");
+    state.vlmAnalysisPromise = runAutomaticVlmAnalysis("source_photo");
   } catch (error) {
     console.warn(error);
     event.target.value = "";
@@ -514,7 +273,16 @@ async function captureCameraFrame() {
   try {
     setStatus("拍攝中");
     const dataUrl = await captureBestCameraFrame(state.stream, els.cameraFeed);
+    state.sourceMetadata = {
+      source: "camera_capture",
+      ...createRuntimeCaptureMoment(),
+      location: null,
+      exifPresent: false
+    };
     await setSourceImage(dataUrl);
+    promptForCharacterName();
+    state.captureContextPromise = refreshAutomaticCaptureContext("camera_capture");
+    state.vlmAnalysisPromise = runAutomaticVlmAnalysis("camera_capture");
     await stopCamera();
   } catch (error) {
     console.warn(error);
@@ -529,6 +297,8 @@ async function setSourceImage(dataUrl) {
   state.sourceImage = normalizedImage;
   state.generatedCard = null;
   state.reroll = 0;
+  state.questionnaireCandidates = null;
+  state.selectedQuestionnaireCandidates = {};
   els.imagePreview.src = state.sourceImage;
   els.captureFrame.classList.add("has-image");
   updateSummonAvailability();
@@ -547,9 +317,14 @@ async function analyzeCurrentImage() {
 }
 
 async function suggestVisibleSemanticTags() {
+  state.vlmAnalysisPromise = runAutomaticVlmAnalysis("manual_retry");
+  await state.vlmAnalysisPromise;
+}
+
+async function runAutomaticVlmAnalysis(reason = "automatic") {
   if (!state.sourceImage) return;
   try {
-    setStatus("VLM 解析中");
+    setStatus(reason === "manual_retry" ? "VLM 重新解析中" : "VLM 自動解析中");
     els.visionTagsButton.disabled = true;
     const subjectImageDataUrl = await createCenterSubjectCropDataUrl(state.sourceImage);
     const result = await requestVisionTags(state.sourceImage, subjectImageDataUrl);
@@ -559,11 +334,14 @@ async function suggestVisibleSemanticTags() {
     }
     els.semanticTagsInput.value = result.tags.join(", ");
     await analyzeCurrentImage();
+    await waitForAutomaticCaptureContext();
+    const candidateResult = await requestQuestionnaireCandidates(state.sourceImage, subjectImageDataUrl, state.analysis);
+    applyQuestionnaireCandidates(candidateResult);
     els.saveCardButton.disabled = true;
-    setStatus(`VLM 候選 ${result.tags.length} 個`);
+    setStatus(`VLM 已完成，角色規格候選已準備`);
   } catch (error) {
     console.warn(error);
-    setStatus(error.message || "VLM 解析失敗");
+    setStatus(reason === "manual_retry" ? error.message || "VLM 解析失敗" : "VLM 自動解析失敗，可手動重試");
   } finally {
     updateSummonAvailability();
   }
@@ -577,6 +355,13 @@ async function summonCard() {
   }
   setStatus("生成卡牌中");
   els.summonButton.disabled = true;
+  if (state.vlmAnalysisPromise) {
+    setStatus("等待 VLM 規格解析");
+    await state.vlmAnalysisPromise.catch((error) => {
+      console.warn(error);
+    });
+  }
+  await waitForAutomaticCaptureContext();
   state.generatedCard = await createCard(state.analysis, state.sourceImage, state.reroll, readGenerationProfile());
   renderCard(state.generatedCard);
   els.saveCardButton.disabled = false;
@@ -593,11 +378,13 @@ function rerollCardTitle() {
 
 function saveGeneratedCard() {
   if (!state.generatedCard) return;
+  const savedId = crypto.randomUUID();
   const saved = {
     ...state.generatedCard,
-    id: crypto.randomUUID(),
+    id: savedId,
     createdAt: new Date().toISOString()
   };
+  saved.progression = normalizeCardProgression(saved, { cardId: savedId });
   state.deck.unshift(saved);
   state.selectedCardId = saved.id;
   persistDeck();
@@ -605,27 +392,210 @@ function saveGeneratedCard() {
   els.startBattleButton.disabled = false;
 }
 
+async function refreshAutomaticCaptureContext(reason = "runtime") {
+  const runtimeMoment = createRuntimeCaptureMoment();
+  const sourceMetadata = state.sourceMetadata ?? {};
+  const captureMoment = {
+    ...runtimeMoment,
+    capturedAt: sourceMetadata.capturedAt || runtimeMoment.capturedAt,
+    localDate: sourceMetadata.localDate || runtimeMoment.localDate,
+    source: sourceMetadata.source || reason
+  };
+  setContextStatus("自動取得地點/節日中");
+
+  const exifLocation = sourceMetadata.location;
+  const browserLocation = exifLocation ? null : await readBrowserGeolocation();
+  const location = exifLocation ?? browserLocation?.location ?? null;
+
+  try {
+    const result = await requestCaptureContext({
+      reason,
+      captureMoment,
+      sourceMetadata: {
+        source: sourceMetadata.source || reason,
+        exifPresent: Boolean(sourceMetadata.exifPresent),
+        fileName: sourceMetadata.fileName || ""
+      },
+      worldEventMoment: runtimeMoment,
+      holidayRegion: {
+        countryCode: "US",
+        regionCode: ""
+      },
+      location,
+      locationError: browserLocation?.error ?? null
+    });
+    state.captureContextResolution = result;
+    setContextStatus(describeCaptureContextStatus(result));
+    return result;
+  } catch (error) {
+    console.warn(error);
+    state.captureContextResolution = createFallbackCaptureContextResolution(captureMoment, error.message, runtimeMoment);
+    setContextStatus("使用預設地點/節日");
+    return state.captureContextResolution;
+  }
+}
+
+async function waitForAutomaticCaptureContext() {
+  if (!state.captureContextPromise) {
+    state.captureContextPromise = refreshAutomaticCaptureContext("on_demand");
+  }
+  try {
+    await state.captureContextPromise;
+  } catch {
+    // refreshAutomaticCaptureContext stores a fallback result, so generation can continue.
+  }
+}
+
+function readBrowserGeolocation() {
+  if (!navigator.geolocation) {
+    return Promise.resolve({
+      location: null,
+      error: { code: "geolocation_unavailable", message: "Browser geolocation is unavailable." }
+    });
+  }
+
+  return new Promise((resolve) => {
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        resolve({
+          location: {
+            coordinates: {
+              latitude: Number(position.coords.latitude.toFixed(6)),
+              longitude: Number(position.coords.longitude.toFixed(6))
+            },
+            accuracyMeters: Number.isFinite(position.coords.accuracy) ? Math.round(position.coords.accuracy) : null,
+            acquisitionMethod: "browser_geolocation",
+            capturedAt: new Date(position.timestamp).toISOString()
+          },
+          error: null
+        });
+      },
+      (error) => {
+        resolve({
+          location: null,
+          error: {
+            code: geolocationErrorCode(error),
+            message: error.message
+          }
+        });
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 7000,
+        maximumAge: 5 * 60 * 1000
+      }
+    );
+  });
+}
+
+async function requestCaptureContext(payload) {
+  const response = await fetch("/api/capture-context", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json"
+    },
+    body: JSON.stringify(payload)
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(result.message || result.error || "capture context failed");
+  }
+  return result;
+}
+
+function createFallbackCaptureContextResolution(captureMoment, message = "", worldEventMoment = createRuntimeCaptureMoment()) {
+  return {
+    ok: false,
+    provider: "local_fallback",
+    message,
+    captureContext: {
+      capturedAt: captureMoment.capturedAt,
+      localDate: captureMoment.localDate,
+      timezone: captureMoment.timezone,
+      locationUse: "none",
+      locationGranularity: "none",
+      placeType: "neutral",
+      timeMood: "clear",
+      locationReference: {
+        acquisitionMethod: "none"
+      },
+      locationCreativeTags: []
+    },
+    eventContext: {
+      localDate: worldEventMoment.localDate,
+      timezone: worldEventMoment.timezone,
+      countryCode: "US",
+      regionCode: "",
+      eventDatePolicy: "current_real_world_us",
+      eventSource: "local_static_date_motifs",
+      holidayTags: [],
+      localEventTags: [],
+      eventCreativeTags: []
+    },
+    acquisitionStatus: {
+      context: "fallback"
+    }
+  };
+}
+
+function describeCaptureContextStatus(result) {
+  const status = result?.acquisitionStatus ?? {};
+  if (status.location === "photo_exif_gps") return "照片 GPS/節日已自動取得";
+  if (status.location === "browser_geolocation") return "裝置 GPS/節日已自動取得";
+  if (status.holidays === "ok") return "節日已自動取得";
+  return "使用預設地點/節日";
+}
+
+function geolocationErrorCode(error) {
+  if (error.code === error.PERMISSION_DENIED) return "permission_denied";
+  if (error.code === error.POSITION_UNAVAILABLE) return "position_unavailable";
+  if (error.code === error.TIMEOUT) return "timeout";
+  return "unknown";
+}
+
+function setContextStatus(message) {
+  if (els.privacyStatus) els.privacyStatus.textContent = message;
+}
+
 function readGenerationProfile() {
-  const ageBand = els.ageInput.value;
+  const automaticCaptureContext = state.captureContextResolution?.captureContext ?? {};
+  const automaticEventContext = state.captureContextResolution?.eventContext ?? null;
+  const selectedCandidates = state.selectedQuestionnaireCandidates ?? {};
+  const vlmAutoFields = state.questionnaireCandidates?.vlmAutoFields ?? {};
+  const selectedAgeBand = readCandidateValue(selectedCandidates.ageImpression);
+  const ageBand = ageProfiles[selectedAgeBand] ? selectedAgeBand : els.ageInput.value;
   const ageProfile = ageProfiles[ageBand] ?? ageProfiles.young_adult;
-  const occupation = normalizeFreeText(els.occupationInput.value, 36);
-  const features = normalizeFreeText(els.featureInput.value, 96);
-  const combatStyle = els.combatStyleInput.value;
+  const occupation = normalizeFreeText(readCandidateValue(vlmAutoFields.realWorldRole) || els.occupationInput.value, 36);
+  const autoSpecialty = readCandidateValues(vlmAutoFields.specialty).join(", ");
+  const features = normalizeFreeText([autoSpecialty, els.featureInput.value].filter(Boolean).join(", "), 96);
+  const autoCombatStyle = readCandidateValue(vlmAutoFields.combatStyle);
+  const combatStyle = combatStyleProfiles[autoCombatStyle] ? autoCombatStyle : els.combatStyleInput.value;
   const combatProfile = combatStyleProfiles[combatStyle] ?? combatStyleProfiles.auto;
-  const cardMood = els.cardMoodInput.value;
+  const autoCardMood = readCandidateValue(vlmAutoFields.cardMood);
+  const cardMood = ["cinematic", "neon", "arcane", "royal"].includes(autoCardMood) ? autoCardMood : els.cardMoodInput.value;
   const characterFormBranch = readConfiguredCharacterForm(els.characterFormInput.value);
   const imageMode = readConfiguredImageMode(els.imageModeInput.value);
-  const backstory = normalizeFreeText(els.backstoryInput.value, 120);
-  const valueKey = els.valueInput.value;
+  const backstory = normalizeFreeText(readCandidateValue(selectedCandidates.storyEvent) || els.backstoryInput.value, 120);
+  const selectedValueKey = readCandidateValue(selectedCandidates.values);
+  const valueKey = valueProfiles[selectedValueKey] ? selectedValueKey : els.valueInput.value;
   const valueProfile = valueProfiles[valueKey] ?? valueProfiles.growth;
-  const weakness = normalizeFreeText(els.weaknessInput.value, 80);
-  const signatureItem = normalizeFreeText(els.signatureItemInput.value, 36);
-  const placeType = els.placeTypeInput.value;
+  const weakness = normalizeFreeText(readCandidateValue(selectedCandidates.weakness) || els.weaknessInput.value, 80);
+  const signatureItem = normalizeFreeText(readCandidateValue(vlmAutoFields.signatureItem) || els.signatureItemInput.value, 36);
+  const placeType = placeTypeProfiles[automaticCaptureContext.placeType] ? automaticCaptureContext.placeType : els.placeTypeInput.value;
   const placeProfile = placeTypeProfiles[placeType] ?? placeTypeProfiles.neutral;
-  const timeMood = els.timeMoodInput.value;
+  const timeMood = timeMoodProfiles[automaticCaptureContext.timeMood] ? automaticCaptureContext.timeMood : els.timeMoodInput.value;
   const timeProfile = timeMoodProfiles[timeMood] ?? timeMoodProfiles.clear;
+  const eventCombatProfile = resolveEventCombatProfile({
+    captureContext: {
+      ...automaticCaptureContext,
+      placeType,
+      timeMood
+    },
+    eventContext: automaticEventContext
+  });
   return {
     photoConsent: hasPhotoConsent(),
+    characterName: state.characterName || "路人",
     ageBand,
     ageLabel: ageProfile.label,
     occupation,
@@ -646,18 +616,24 @@ function readGenerationProfile() {
     placeTypeLabel: placeProfile.label,
     timeMood,
     timeMoodLabel: timeProfile.label,
+    eventCombatProfile,
     userSuppliedContext: {
       backstory,
       values: [valueKey],
       weakness,
       signatureItem
     },
+    selectedQuestionnaireCandidates: selectedCandidates,
+    vlmAutoFields,
     captureContext: {
+      ...automaticCaptureContext,
       placeType,
       timeMood,
       placeTypeLabel: placeProfile.label,
       timeMoodLabel: timeProfile.label
-    }
+    },
+    eventContext: automaticEventContext,
+    contextAcquisitionStatus: state.captureContextResolution?.acquisitionStatus ?? {}
   };
 }
 
@@ -669,6 +645,7 @@ function createDefaultGenerationProfile() {
   const timeProfile = timeMoodProfiles.clear;
   return {
     photoConsent: false,
+    characterName: "路人",
     ageBand: "young_adult",
     ageLabel: ageProfile.label,
     occupation: "",
@@ -689,6 +666,13 @@ function createDefaultGenerationProfile() {
     placeTypeLabel: placeProfile.label,
     timeMood: "clear",
     timeMoodLabel: timeProfile.label,
+    eventCombatProfile: resolveEventCombatProfile({
+      captureContext: {
+        placeType: "neutral",
+        timeMood: "clear"
+      },
+      eventContext: null
+    }),
     userSuppliedContext: {
       backstory: "",
       values: ["growth"],
@@ -700,8 +684,26 @@ function createDefaultGenerationProfile() {
       timeMood: "clear",
       placeTypeLabel: placeProfile.label,
       timeMoodLabel: timeProfile.label
-    }
+    },
+    eventContext: null
   };
+}
+
+function readCandidateValue(value) {
+  if (Array.isArray(value)) return readCandidateValue(value[0]);
+  if (value && typeof value === "object") return normalizeFreeText(String(value.value ?? value.label ?? ""), 120);
+  return normalizeFreeText(String(value ?? ""), 120);
+}
+
+function readCandidateValues(value) {
+  const values = Array.isArray(value) ? value : value ? [value] : [];
+  return [
+    ...new Set(
+      values
+        .map(readCandidateValue)
+        .filter(Boolean)
+    )
+  ];
 }
 
 function normalizeFreeText(value, maxLength) {
@@ -744,11 +746,13 @@ function applyProfileStatMods(stats, generationProfile) {
   const placeProfile = placeTypeProfiles[generationProfile.placeType] ?? placeTypeProfiles.neutral;
   const timeProfile = timeMoodProfiles[generationProfile.timeMood] ?? timeMoodProfiles.clear;
   const weaknessMatch = matchWeakness(generationProfile.weakness);
+  const eventProfile = resolveEventCombatProfile(generationProfile);
   applyStatMods(stats, ageProfile.statMods);
   applyStatMods(stats, combatProfile.statMods);
   applyStatMods(stats, valueProfile.statMods);
   applyStatMods(stats, placeProfile.statMods);
   applyStatMods(stats, timeProfile.statMods);
+  applyStatMods(stats, eventProfile.statMods);
   if (occupationMatch) {
     applyStatMods(stats, occupationMatch.statMods);
   }
@@ -783,6 +787,84 @@ function applyArchetypeBias(scores, bias) {
   }
 }
 
+function resolveEventCombatProfile(generationProfile = {}) {
+  const eventContext = generationProfile.eventContext ?? {};
+  const captureContext = generationProfile.captureContext ?? {};
+  const season = normalizeSeasonKey(eventContext.season || deriveSeasonFromLocalDate(eventContext.localDate || captureContext.localDate));
+  const seasonProfile = season ? seasonCombatProfiles[season] : null;
+  const eventRule = matchEventCombatProfile(eventContext);
+  const statMods = mergeNumberMaps(seasonProfile?.statMods, eventRule?.statMods);
+  const archetypeBias = mergeNumberMaps(seasonProfile?.archetypeBias, eventRule?.archetypeBias);
+  const sourceTags = collectEventContextSignals(eventContext);
+
+  return {
+    key: [season || "", eventRule?.key || ""].filter(Boolean).join(".") || "none",
+    label: eventRule?.label || seasonProfile?.label || "日常基準",
+    season,
+    eventKey: eventRule?.key || "",
+    statMods,
+    archetypeBias,
+    trait: eventRule?.trait || seasonProfile?.trait || "",
+    skillWord: eventRule?.skillWord || seasonProfile?.skillWord || "",
+    promptHook: eventRule?.promptHook || seasonProfile?.promptHook || "",
+    sourceTags: sourceTags.slice(0, 8)
+  };
+}
+
+function matchEventCombatProfile(eventContext = {}) {
+  const text = collectEventContextSignals(eventContext).join(" ").toLocaleLowerCase();
+  if (!text) return null;
+  return eventCombatProfiles.find((profile) =>
+    profile.patterns.some((pattern) => text.includes(String(pattern).toLocaleLowerCase()))
+  ) ?? null;
+}
+
+function collectEventContextSignals(eventContext = {}) {
+  const publicHolidays = Array.isArray(eventContext.publicHolidays) ? eventContext.publicHolidays : [];
+  return [
+    ...readEventStringList(eventContext.holidayTags),
+    ...readEventStringList(eventContext.localEventTags),
+    ...readEventStringList(eventContext.eventCreativeTags),
+    ...publicHolidays.flatMap((holiday) => [
+      holiday.name,
+      holiday.localName,
+      ...(Array.isArray(holiday.types) ? holiday.types : [])
+    ])
+  ]
+    .map((value) => normalizeFreeText(String(value ?? ""), 80))
+    .filter(Boolean);
+}
+
+function readEventStringList(value) {
+  if (Array.isArray(value)) return value;
+  if (typeof value === "string") return value.split(/[,，、;\n]/u);
+  return [];
+}
+
+function deriveSeasonFromLocalDate(localDate) {
+  const month = Number(String(localDate ?? "").slice(5, 7));
+  if (!Number.isFinite(month) || month < 1 || month > 12) return "";
+  if (month >= 3 && month <= 5) return "spring";
+  if (month >= 6 && month <= 8) return "summer";
+  if (month >= 9 && month <= 11) return "autumn";
+  return "winter";
+}
+
+function normalizeSeasonKey(value) {
+  const key = String(value ?? "").trim().toLocaleLowerCase();
+  return seasonCombatProfiles[key] ? key : "";
+}
+
+function mergeNumberMaps(...maps) {
+  const result = {};
+  for (const map of maps) {
+    for (const [key, value] of Object.entries(map ?? {})) {
+      result[key] = (result[key] ?? 0) + Number(value || 0);
+    }
+  }
+  return result;
+}
+
 function createOccupationArtifact(occupation) {
   const match = matchOccupation(occupation);
   if (!occupation.trim()) return "無名徽記";
@@ -796,23 +878,26 @@ function createOccupationArtifact(occupation) {
   return `${occupation.slice(0, 6)}徽記`;
 }
 
-function createFutureImagePrompt(title, archetype, appearance, generationProfile, analysis) {
-  const context = createCardArtPromptContext(title, archetype, appearance, generationProfile, analysis);
+function createFutureImagePrompt(title, archetype, appearance, generationProfile, analysis, promptProfile) {
+  const context = createCardArtPromptContext(title, archetype, appearance, generationProfile, analysis, promptProfile);
   if (context.characterFormBranch === "animalized.cat") {
     return createAnimalizedCatImagePrompt(context);
   }
   return createHumanlikeImagePrompt(context);
 }
 
-function createCardArtPromptContext(title, archetype, appearance, generationProfile, analysis) {
+function createCardArtPromptContext(title, archetype, appearance, generationProfile, analysis, promptProfile) {
   const feature = generationProfile.featureTags.join("、") || "保留來源照片的主要人物特徵";
   const backstory = generationProfile.backstory || "rising challenger from the Localhost Training Gate";
   const signatureItem = generationProfile.signatureItem || appearance.occupationArtifact;
   const setting = `${generationProfile.placeTypeLabel} / ${generationProfile.timeMoodLabel}`;
+  const eventProfile = generationProfile.eventCombatProfile ?? resolveEventCombatProfile(generationProfile);
+  const eventMotif = eventProfile.label && eventProfile.label !== "日常基準" ? eventProfile.label : "everyday origin rhythm";
   const weakness = generationProfile.weakness ? `tradeoff motif ${generationProfile.weakness}` : "balanced growth tradeoff";
   const promptTags = createPromptTagProfile(analysis);
   const palette = describePaletteForPrompt(analysis);
   const modelFit = describeModelFitProfile(generationProfile);
+  const promptHookText = formatPromptHooksForImageModel(promptProfile);
   return {
     title,
     archetype,
@@ -823,16 +908,20 @@ function createCardArtPromptContext(title, archetype, appearance, generationProf
     backstory,
     signatureItem,
     setting,
+    eventMotif,
+    eventProfile,
     weakness,
     promptTags,
     palette,
     modelFit,
+    promptProfile,
+    promptHookText,
     characterFormBranch: normalizeCharacterFormBranch(generationProfile.characterFormBranch)
   };
 }
 
 function createHumanlikeImagePrompt(context) {
-  const { title, archetype, appearance, generationProfile, feature, signatureItem, setting, backstory, weakness, promptTags, palette, modelFit } = context;
+  const { title, archetype, appearance, generationProfile, feature, signatureItem, setting, eventMotif, backstory, weakness, promptTags, palette, modelFit, promptHookText } = context;
   return [
     `${CARD_ART_PROMPT_VERSION}`,
     "CHARACTER FORM BRANCH: humanlike",
@@ -844,7 +933,9 @@ function createHumanlikeImagePrompt(context) {
     `IDENTITY LOCK: preserve recognizable facial likeness from the source reference: face shape, jaw impression, eye and brow spacing, nose and mouth proportions, expression character`,
     `TARGET SUBJECT VISIBLE CUES: ${promptTags.subject}`,
     `CHARACTER SPEC: age direction ${generationProfile.ageLabel}; role ${generationProfile.occupation || "unspecified"}; values ${generationProfile.valueLabel}; traits ${feature}; artifact ${signatureItem}; tradeoff ${weakness}`,
+    `EVENT / FESTIVAL MOTIF: ${eventMotif}; use it as character energy, costume accent, lighting, prop motif, and skill visual language without drawing maps or readable holiday text`,
     `WORLD CONTEXT FROM PHOTO: ${promptTags.world}`,
+    promptHookText,
     `SCENE REMAKE: use the world context as inspiration, not as a literal photo trace; use abstract neon shapes and unlettered environment panels instead of readable signs; setting seed ${setting}; story seed ${backstory}`,
     `ART DIRECTION: ${modelFit.style}, high-contrast anime-real game character illustration, heroic upper-body crop, clean readable silhouette, sharp focal face, controlled detail density, dramatic rim light, energy accent ${archetype.accent}`,
     `PALETTE: ${palette}`,
@@ -852,11 +943,11 @@ function createHumanlikeImagePrompt(context) {
     "COMPOSITION LOCK: single foreground character, centered face and torso, dynamic but readable pose, background supports the subject, do not draw a trading card, do not draw a card border, no extra foreground people",
     `OUTFIT/PROP DIRECTION: ${appearance.outfit}; ${signatureItem}; keep target-subject clothing cues when visible`,
     "MODEL GUIDANCE: prioritize face likeness and believable human anatomy over style change; keep face recognizable; avoid over-transforming the body"
-  ].join("\n");
+  ].filter(Boolean).join("\n");
 }
 
 function createAnimalizedCatImagePrompt(context) {
-  const { title, archetype, appearance, generationProfile, feature, signatureItem, setting, backstory, weakness, promptTags, palette, modelFit } = context;
+  const { title, archetype, appearance, generationProfile, feature, signatureItem, setting, eventMotif, backstory, weakness, promptTags, palette, modelFit, promptHookText } = context;
   return [
     `${CARD_ART_PROMPT_VERSION}`,
     "CHARACTER FORM BRANCH: animalized.cat",
@@ -867,7 +958,9 @@ function createAnimalizedCatImagePrompt(context) {
     "CAT ANATOMY LOCK: one cat head, two ears, one tail, two front paws and two hind legs, or a clearly readable two-arm two-leg mascot body; no extra paws, no extra tails, no multiplied fingers",
     `TARGET SUBJECT CUE SOURCE: ${promptTags.subject}`,
     `CHARACTER SPEC: age direction ${generationProfile.ageLabel}; role motif ${generationProfile.occupation || "unspecified"}; values ${generationProfile.valueLabel}; traits ${feature}; artifact ${signatureItem}; tradeoff ${weakness}`,
+    `EVENT / FESTIVAL MOTIF: ${eventMotif}; translate it into cat costume, light, prop, and power effects without drawing maps or readable holiday text`,
     `WORLD CONTEXT FROM PHOTO: ${promptTags.world}`,
+    promptHookText,
     `SCENE REMAKE: use the world context as inspiration for the cat character's environment; setting seed ${setting}; story seed ${backstory}`,
     `ART DIRECTION: ${modelFit.style}, stylized cat arcade challenger portrait, clean readable silhouette, expressive cat face, controlled detail density, dramatic rim light, energy accent ${archetype.accent}`,
     `PALETTE: ${palette}`,
@@ -875,7 +968,7 @@ function createAnimalizedCatImagePrompt(context) {
     "COMPOSITION LOCK: single foreground cat protagonist, centered face and torso/body, background supports the subject, do not draw a trading card, do not draw a card border, no human foreground character",
     `OUTFIT/PROP DIRECTION: translate ${appearance.outfit} and ${signatureItem} into cat-sized costume motifs and props; keep source-photo clothing cues as pattern, color, accessory, or emblem`,
     "MODEL GUIDANCE: prioritize clear cat protagonist form and transferred personal cues; do not preserve a literal human face; avoid plain pet portrait realism"
-  ].join("\n");
+  ].filter(Boolean).join("\n");
 }
 
 function describePhotoSignalsForPrompt(analysis) {
@@ -1042,6 +1135,10 @@ async function createCard(analysis, sourceImageDataUrl, reroll, generationProfil
     generationProfile.signatureItem,
     generationProfile.placeType,
     generationProfile.timeMood,
+    generationProfile.eventCombatProfile?.key,
+    generationProfile.eventCombatProfile?.label,
+    ...(generationProfile.eventCombatProfile?.sourceTags ?? []),
+    generationProfile.characterName,
     analysis.metrics.brightness.toFixed(4),
     analysis.metrics.contrast.toFixed(4),
     reroll
@@ -1050,7 +1147,7 @@ async function createCard(analysis, sourceImageDataUrl, reroll, generationProfil
   const rng = mulberry32(seed);
   const archetype = chooseArchetype(analysis, rng, generationProfile);
   const rarity = chooseRarity(analysis, rng);
-  const title = createTitle(archetype, analysis, rng);
+  const title = createTitle(archetype, analysis, rng, generationProfile.characterName);
   const stats = createStats(analysis, archetype, rarity, rng, generationProfile);
   const hpBase = 96 + Math.round(stats.guard * 1.65 + stats.focus * 0.45);
   const traits = createTraits(analysis, archetype, generationProfile);
@@ -1060,18 +1157,32 @@ async function createCard(analysis, sourceImageDataUrl, reroll, generationProfil
   const personality = createPersonality(analysis, rng, generationProfile);
   const combatRole = createCombatRole(stats, archetype, generationProfile);
   const lore = createLore(title, archetype, traits, analysis, appearance, personality, generationProfile);
-  const futureAiPrompt = createFutureImagePrompt(title, archetype, appearance, generationProfile, analysis);
+  const characterSpecContexts = buildCharacterSpecContexts({
+    analysis,
+    generationProfile,
+    captureMoment: createRuntimeCaptureMoment()
+  });
+  const futureAiPrompt = createFutureImagePrompt(title, archetype, appearance, generationProfile, analysis, characterSpecContexts.promptProfile);
   const cardArtNegativePrompt = createCardArtNegativePrompt(generationProfile.characterFormBranch);
   const characterSpec = {
     schema: "photo-character-lab.character.v1",
     source: "real_photo_local_analysis",
     identityPolicy: "no_identity_recognition",
     characterFormBranch: generationProfile.characterFormBranch,
+    sourceRefs: characterSpecContexts.sourceRefs,
+    acquisitionMethods: characterSpecContexts.acquisitionMethods,
+    contexts: characterSpecContexts.contexts,
+    promptProfile: characterSpecContexts.promptProfile,
+    derived: {
+      eventCombatProfile: generationProfile.eventCombatProfile ?? resolveEventCombatProfile(generationProfile)
+    },
     visualPipeline: {
       retouchMode:
-        generationProfile.imageMode === "comfy"
+        generationProfile.imageMode === "gemini"
+          ? "gemini_image_generation"
+          : generationProfile.imageMode === "comfy"
           ? "comfyui_local_workflow"
-          : generationProfile.imageMode === "ai"
+          : generationProfile.imageMode === "openai"
             ? "openai_image_edit"
             : "local_canvas_preview_v1",
       coverMode: "battle_card_cover_canvas_v1",
@@ -1083,8 +1194,10 @@ async function createCard(analysis, sourceImageDataUrl, reroll, generationProfil
     consent: {
       subject: "user_confirmed",
       photoUse: generationProfile.photoConsent,
-      sensitiveContextUse: "none",
-      captureContextUse: "manual_coarse"
+      locationUse: characterSpecContexts.contexts.capture.locationUse,
+      sensitiveContextUse: "explicit_only",
+      captureContextUse: characterSpecContexts.contexts.capture.locationUse,
+      imageProviderUse: "prompt_hooks_only_by_default"
     },
     userSuppliedContext: generationProfile.userSuppliedContext,
     captureContext: generationProfile.captureContext,
@@ -1096,6 +1209,7 @@ async function createCard(analysis, sourceImageDataUrl, reroll, generationProfil
       source: analysis.semanticTagSource
     },
     generationProfile,
+    characterName: generationProfile.characterName,
     name: title,
     className: archetype.name,
     element: archetype.element,
@@ -1103,6 +1217,7 @@ async function createCard(analysis, sourceImageDataUrl, reroll, generationProfil
     appearance,
     personality,
     combatRole,
+    eventCombatProfile: generationProfile.eventCombatProfile ?? resolveEventCombatProfile(generationProfile),
     traits,
     stats,
     cardStatLine,
@@ -1117,22 +1232,51 @@ async function createCard(analysis, sourceImageDataUrl, reroll, generationProfil
     error: null
   };
 
-  if (generationProfile.imageMode === "ai") {
+  if (generationProfile.imageMode === "openai") {
     try {
-      setStatus("外部 AI 修飾中");
-      const aiResult = await requestAiRetouch(sourceImageDataUrl, futureAiPrompt);
+      setStatus("OpenAI 生圖中");
+      const aiResult = await requestOpenAiCardArt(sourceImageDataUrl, futureAiPrompt);
       aiPortraitDataUrl = aiResult.imageDataUrl;
       imageGeneration = {
-        mode: "ai",
-        status: "ai_generated",
+        mode: "openai",
+        status: "openai_generated",
         model: aiResult.model,
+        provider: aiResult.provider,
         promptVersion: CARD_ART_PROMPT_VERSION,
         error: null
       };
     } catch (error) {
       console.warn(error);
       imageGeneration = {
-        mode: "ai",
+        mode: "openai",
+        status: "fallback_local_preview",
+        model: null,
+        promptVersion: CARD_ART_PROMPT_VERSION,
+        error: error.message
+      };
+    }
+  }
+
+  if (generationProfile.imageMode === "gemini") {
+    try {
+      setStatus("Gemini 生圖中");
+      const geminiResult = await requestGeminiCardArt(sourceImageDataUrl, futureAiPrompt, {
+        negativePrompt: cardArtNegativePrompt
+      });
+      aiPortraitDataUrl = geminiResult.imageDataUrl;
+      imageGeneration = {
+        mode: "gemini",
+        status: "gemini_generated",
+        model: geminiResult.model,
+        promptVersion: CARD_ART_PROMPT_VERSION,
+        provider: geminiResult.provider,
+        interactionId: geminiResult.interactionId ?? null,
+        error: null
+      };
+    } catch (error) {
+      console.warn(error);
+      imageGeneration = {
+        mode: "gemini",
         status: "fallback_local_preview",
         model: null,
         promptVersion: CARD_ART_PROMPT_VERSION,
@@ -1201,8 +1345,20 @@ async function createCard(analysis, sourceImageDataUrl, reroll, generationProfil
     rng: mulberry32(seed + 991)
   });
 
+  const cardId = `preview-${seed}`;
+  const progression = createInitialProgressionState({
+    cardId,
+    level: 1,
+    xp: 0,
+    wins: 0,
+    losses: 0,
+    battles: 0,
+    currentArtUrl: imageDataUrl,
+    provider: imageGeneration.provider ?? imageGeneration.mode ?? null
+  });
+
   return {
-    id: `preview-${seed}`,
+    id: cardId,
     kind: "character",
     name: title,
     className: archetype.name,
@@ -1221,8 +1377,10 @@ async function createCard(analysis, sourceImageDataUrl, reroll, generationProfil
     appearance,
     personality,
     combatRole,
+    eventCombatProfile: generationProfile.eventCombatProfile ?? resolveEventCombatProfile(generationProfile),
     lore,
     characterSpec,
+    progression,
     imageGeneration,
     analysis,
     sourceImageDataUrl,
@@ -1268,6 +1426,7 @@ function chooseArchetype(analysis, rng, generationProfile) {
   applyArchetypeBias(scores, valueProfiles[generationProfile.valueKey]?.archetypeBias);
   applyArchetypeBias(scores, placeTypeProfiles[generationProfile.placeType]?.archetypeBias);
   applyArchetypeBias(scores, timeMoodProfiles[generationProfile.timeMood]?.archetypeBias);
+  applyArchetypeBias(scores, resolveEventCombatProfile(generationProfile).archetypeBias);
   scores.sort((a, b) => b.score - a.score);
   return archetypes.find((item) => item.key === scores[0].key) ?? archetypes[0];
 }
@@ -1359,16 +1518,41 @@ function distributeBonus(stats, bonus, rng) {
   }
 }
 
-function createTitle(archetype, analysis, rng) {
-  const prefixes = ["街角", "鏡界", "第七", "夜巡", "晨光", "逆風", "星塵", "霓虹", "鐵序", "潮聲"];
-  const nouns = ["決鬥者", "調律師", "守望者", "召喚師", "破陣者", "策士", "行者", "執牌人"];
+function createTitle(archetype, analysis, rng, characterName = "路人") {
+  const prefixes = ["街角", "鏡界", "第七", "夜巡", "晨光", "逆風", "星塵", "霓虹", "鐵序", "潮聲", "潮流", "陽光"];
+  const rolePrefixes = ["決鬥", "調律", "守望", "召喚", "破陣", "戰術", "疾行", "聚光"];
   const sigil = sanitizeSigil(analysis.textSeed);
+  const baseName = normalizeCharacterName(characterName);
+  const roleWord = createTitleRoleWord(analysis, archetype);
 
   if (sigil && rng() > 0.42) {
-    return `${sigil}的${archetype.name}`;
+    return `${sigil}${baseName}`;
   }
 
-  return `${pick(prefixes, rng)}${pick(nouns, rng)}`;
+  if (rng() > 0.68) {
+    return `${pick(prefixes, rng)}${roleWord}${baseName}`;
+  }
+
+  if (rng() > 0.5) {
+    return `${pick(rolePrefixes, rng)}${archetype.name.replace(/[者師客使衛士]+$/u, "")}${baseName}`;
+  }
+
+  return `${pick(prefixes, rng)}${baseName}`;
+}
+
+function createTitleRoleWord(analysis, archetype) {
+  const text = [
+    analysis.textSeed,
+    ...(analysis.visibleSemanticTags ?? []),
+    ...Object.values(analysis.visibleSemanticTagGroups ?? {}).flat()
+  ]
+    .join(" ")
+    .toLocaleLowerCase();
+  if (/(basketball|ball|court|athlete|player|stadium|sport|籃球|球場|球員|運動|競技)/u.test(text)) return "球員";
+  if (/(arcade|game|controller|pac-man|galaga|街機|遊戲|手把)/u.test(text)) return "玩家";
+  if (/(camera|poster|design|art|studio|相機|海報|設計|創作)/u.test(text)) return "創作者";
+  if (/(laptop|book|office|school|data|筆電|書|辦公|學校|資料)/u.test(text)) return "策士";
+  return archetype.name.replace(/[者師客使衛士]+$/u, "") || "挑戰者";
 }
 
 function sanitizeSigil(value) {
@@ -1389,6 +1573,7 @@ function createTraits(analysis, archetype, generationProfile = readGenerationPro
   const placeProfile = placeTypeProfiles[generationProfile.placeType] ?? placeTypeProfiles.neutral;
   const timeProfile = timeMoodProfiles[generationProfile.timeMood] ?? timeMoodProfiles.clear;
   const weaknessMatch = matchWeakness(generationProfile.weakness);
+  const eventProfile = resolveEventCombatProfile(generationProfile);
   if (m.edgeDensity > 0.52) traits.push("高速輪廓");
   if (m.centerFocus > 0.58) traits.push("中心壓制");
   if (m.symmetry > 0.62) traits.push("穩定姿態");
@@ -1401,6 +1586,7 @@ function createTraits(analysis, archetype, generationProfile = readGenerationPro
   if (valueProfile.trait) traits.push(valueProfile.trait);
   if (placeProfile.trait) traits.push(placeProfile.trait);
   if (timeProfile.trait) traits.push(timeProfile.trait);
+  if (eventProfile.trait) traits.push(eventProfile.trait);
   if (weaknessMatch?.trait) traits.push(weaknessMatch.trait);
   if (generationProfile.signatureItem) traits.push(`${generationProfile.signatureItem.slice(0, 6)}持有者`);
   for (const tag of generationProfile.featureTags.slice(0, 2)) {
@@ -1497,21 +1683,25 @@ function createSkills(archetype, stats, traits, rng, generationProfile = readGen
   const occupationMatch = matchOccupation(generationProfile.occupation);
   const valueProfile = valueProfiles[generationProfile.valueKey] ?? valueProfiles.growth;
   const weaknessMatch = matchWeakness(generationProfile.weakness);
+  const eventProfile = resolveEventCombatProfile(generationProfile);
   const primary = combatProfile.preferredStat ?? archetype.stat;
   const secondary = primary === "power" ? "speed" : primary === "guard" ? "focus" : "power";
   const skillPower = Math.round(stats[primary] * 0.58 + stats[secondary] * 0.22);
   const utilityPower = Math.round(stats.focus * 0.35 + stats.luck * 0.22 + 10);
-  const signatureWord = occupationMatch?.skillWord ?? combatProfile.skillWord ?? valueProfile.skillWord ?? ageProfile.skillWord;
+  const baseSkillWord = occupationMatch?.skillWord ?? combatProfile.skillWord ?? valueProfile.skillWord ?? ageProfile.skillWord;
+  const signatureWord = eventProfile.skillWord ? `${eventProfile.skillWord}${baseSkillWord}` : baseSkillWord;
   const signatureItem = generationProfile.signatureItem?.slice(0, 8);
   return [
     {
       name: `${signatureWord}${pick(["式", "連段", "戰術"], rng)}`,
       type: "strike",
       power: skillPower,
-      text: `${statLabels[primary]}轉化為一次高倍率攻擊，價值核心為${valueProfile.label}。`
+      text: `${statLabels[primary]}轉化為一次高倍率攻擊，價值核心為${valueProfile.label}，事件核心為${eventProfile.label}。`
     },
     {
-      name: signatureItem
+      name: eventProfile.eventKey
+        ? `${eventProfile.skillWord}回路`
+        : signatureItem
         ? `${signatureItem}回路`
         : traits.includes("文字契印")
           ? "契印回路"
@@ -1520,6 +1710,8 @@ function createSkills(archetype, stats, traits, rng, generationProfile = readGen
       power: utilityPower,
       text: weaknessMatch
         ? `${weaknessMatch.tradeoff} 發動後獲得護盾並降低承受傷害。`
+        : eventProfile.trait
+          ? `以${eventProfile.trait}作為戰術核心，獲得護盾並降低承受傷害。`
         : generationProfile.featureTags[0]
           ? `以${generationProfile.featureTags[0]}作為戰術核心，獲得護盾並降低承受傷害。`
           : "獲得護盾，並在本回合降低承受傷害。"
@@ -1531,43 +1723,61 @@ function createLore(title, archetype, traits, analysis, appearance, personality,
   const dominant = analysis.palette[0]?.label ?? "Unknown";
   const occupation = generationProfile.occupation || "未知身份";
   const feature = generationProfile.featureTags[0] ?? "照片特徵";
+  const eventProfile = resolveEventCombatProfile(generationProfile);
+  const eventLine = eventProfile.label !== "日常基準" ? `，並受到${eventProfile.label}影響` : "";
   const story = generationProfile.backstory ? `${generationProfile.backstory}。` : "";
   const weakness = generationProfile.weakness ? `弱點是${generationProfile.weakness}，因此戰鬥帶有${personality.tradeoff}` : "";
-  return `${story}${title}是${archetype.element}系${archetype.name}，由${occupation}、${feature}、${generationProfile.valueLabel}與${appearance.originBackdrop}轉化而來。外觀被轉譯為${appearance.silhouette}與${appearance.aura}。性格傾向${personality.temperament}，以${traits.slice(1, 3).join("、") || "原始氣場"}建立戰鬥節奏。${weakness}主色訊號為 ${dominant}。`;
+  return `${story}${title}是${archetype.element}系${archetype.name}，由${occupation}、${feature}、${generationProfile.valueLabel}與${appearance.originBackdrop}轉化而來${eventLine}。外觀被轉譯為${appearance.silhouette}與${appearance.aura}。性格傾向${personality.temperament}，以${traits.slice(1, 3).join("、") || "原始氣場"}建立戰鬥節奏。${weakness}主色訊號為 ${dominant}。`;
 }
 
-async function requestAiRetouch(sourceImageDataUrl, prompt) {
-  const response = await fetch("/api/ai-retouch", {
+async function requestOpenAiCardArt(sourceImageDataUrl, prompt) {
+  return requestCardArtProvider("openai", sourceImageDataUrl, prompt, {
+    size: "1024x1536",
+    quality: "medium",
+    inputFidelity: "high"
+  });
+}
+
+async function requestGeminiCardArt(sourceImageDataUrl, prompt, options = {}) {
+  return requestCardArtProvider("gemini", sourceImageDataUrl, prompt, {
+    negativePrompt: options.negativePrompt ?? createCardArtNegativePrompt(),
+    aspectRatio: "3:4",
+    imageSize: "1K"
+  });
+}
+
+async function requestCardArtProvider(provider, sourceImageDataUrl, prompt, options = {}) {
+  const response = await fetch("/api/card-art", {
     method: "POST",
     headers: {
       "content-type": "application/json"
     },
     body: JSON.stringify({
+      provider,
       imageDataUrl: sourceImageDataUrl,
       prompt,
-      size: "1024x1536",
-      quality: "medium",
-      inputFidelity: "high"
+      ...options
     })
   });
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
-    const detail = payload.details?.error?.message ?? payload.message ?? payload.error ?? "AI image generation failed.";
+    const detail = payload.details?.error?.message ?? payload.message ?? payload.error ?? `${provider} image generation failed.`;
     throw new Error(detail);
   }
   if (!payload.imageDataUrl) {
-    throw new Error("AI image API did not return an inline image.");
+    throw new Error(`${provider} image API did not return an inline image.`);
   }
   return payload;
 }
 
 async function requestComfyCardArt(sourceImageDataUrl, prompt, options = {}) {
-  const response = await fetch("/api/comfy-card-art", {
+  const response = await fetch("/api/card-art", {
     method: "POST",
     headers: {
       "content-type": "application/json"
     },
     body: JSON.stringify({
+      provider: "comfy",
       imageDataUrl: sourceImageDataUrl,
       prompt,
       negativePrompt: options.negativePrompt ?? createCardArtNegativePrompt(),
@@ -1612,6 +1822,46 @@ async function requestVisionTags(sourceImageDataUrl, subjectImageDataUrl) {
     throw new Error(detail);
   }
   return payload;
+}
+
+async function requestQuestionnaireCandidates(sourceImageDataUrl, subjectImageDataUrl, analysis) {
+  const response = await fetch("/api/questionnaire-candidates", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json"
+    },
+    body: JSON.stringify({
+      imageDataUrl: sourceImageDataUrl,
+      subjectImageDataUrl,
+      subjectFocus: DEFAULT_SUBJECT_FOCUS,
+      analysis,
+      captureContext: state.captureContextResolution?.captureContext ?? {},
+      eventContext: state.captureContextResolution?.eventContext ?? {},
+      seed: state.reroll
+    })
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const detail = payload.hint ?? payload.message ?? payload.error ?? "VLM character candidate generation failed.";
+    throw new Error(detail);
+  }
+  return payload;
+}
+
+function applyQuestionnaireCandidates(result) {
+  state.questionnaireCandidates = result;
+  state.selectedQuestionnaireCandidates = {
+    ageImpression: result.userChoiceFields?.ageImpression?.[0] ?? null,
+    values: result.userChoiceFields?.values?.[0] ?? null,
+    weakness: result.userChoiceFields?.weakness?.[0] ?? null,
+    storyEvent: chooseSystemStoryEvent(result.userChoiceFields?.storyEvent, state.reroll)
+  };
+}
+
+function chooseSystemStoryEvent(candidates = [], seed = 0) {
+  if (!Array.isArray(candidates) || !candidates.length) return null;
+  const rng = mulberry32(hashString(`${state.sourceImage.slice(0, 80)}:${seed}:story-event`));
+  return candidates[Math.floor(rng() * candidates.length)];
 }
 
 async function createRetouchedPortrait(sourceImageDataUrl, spec) {
@@ -2266,6 +2516,7 @@ function renderAnalysis(analysis) {
 function renderCard(card) {
   const statLine = card.cardStatLine ?? deriveCardStatLine(card);
   const portraitUrl = card.aiPortraitDataUrl ?? card.imageDataUrl;
+  const pendingChoice = getRequiredBranchChoice(card);
   card.cardStatLine = statLine;
   const xpMax = xpThreshold(card.level);
   const xpPercent = clamp(Math.round((card.xp / xpMax) * 100), 0, 100);
@@ -2324,6 +2575,11 @@ function renderCard(card) {
           ? `<p class="ai-warning">${escapeHtml(card.imageGeneration.error)}</p>`
           : ""
       }
+      ${
+        pendingChoice
+          ? `<p class="branch-card-alert">已解鎖 ${escapeHtml(getSlotLabel(pendingChoice.slot))} 分支，需先選擇成長路線。</p>`
+          : ""
+      }
       <div class="card-skill-list">${skillMarkup}</div>
       <div class="trait-list">
         ${card.traits.map((trait) => `<span>${escapeHtml(trait)}</span>`).join("")}
@@ -2344,11 +2600,11 @@ function statRow(key, value) {
 
 function renderDeck() {
   els.deckCount.textContent = `${state.deck.length} 張`;
-  els.startBattleButton.disabled = !state.selectedCardId && state.deck.length === 0;
 
   if (!state.deck.length) {
     els.deckList.innerHTML = `<div class="deck-empty">牌庫尚未建立</div>`;
     renderBattle();
+    renderBranchChoiceModal();
     return;
   }
 
@@ -2356,16 +2612,22 @@ function renderDeck() {
     state.selectedCardId = state.deck[0].id;
   }
 
+  const selectedBeforeRender = getSelectedCard();
+  const selectedPendingChoice = getRequiredBranchChoice(selectedBeforeRender);
+  els.startBattleButton.disabled = !selectedBeforeRender || Boolean(selectedPendingChoice);
+
   els.deckList.innerHTML = state.deck
     .map(
       (card) => {
         const statLine = card.cardStatLine ?? deriveCardStatLine(card);
+        const pendingChoice = getRequiredBranchChoice(card);
         return `
-          <div class="deck-card ${card.id === state.selectedCardId ? "selected" : ""}" style="--accent:${card.accent}">
+          <div class="deck-card ${card.id === state.selectedCardId ? "selected" : ""} ${pendingChoice ? "pending-branch" : ""}" style="--accent:${card.accent}">
             <button class="deck-thumb" type="button" data-select="${card.id}" style="background-image:url('${card.aiPortraitDataUrl ?? card.imageDataUrl}')" aria-label="選擇 ${escapeHtml(card.name)}"></button>
             <button class="deck-meta" type="button" data-select="${card.id}">
               <strong>${escapeHtml(card.name)}</strong>
               <span>Lv.${card.level} ${escapeHtml(card.rarity.key)} / ${escapeHtml(card.className)} / COST ${statLine.cost}</span>
+              ${pendingChoice ? `<span class="branch-pending-badge">待選 ${escapeHtml(getSlotLabel(pendingChoice.slot))}</span>` : ""}
               <span class="deck-statline">
                 <b>HP ${statLine.hp}</b>
                 <b>ATK ${statLine.atk}</b>
@@ -2404,10 +2666,17 @@ function renderDeck() {
   if (selected) {
     renderCard(selected);
   }
+  renderBranchChoiceModal();
 }
 
 function startBattle() {
-  const player = cloneFighter(getSelectedCard());
+  const selected = getSelectedCard();
+  const pendingChoice = getRequiredBranchChoice(selected);
+  if (pendingChoice) {
+    openBranchChoiceModalForCard(selected, pendingChoice);
+    return;
+  }
+  const player = cloneFighter(selected);
   if (!player) return;
   const enemy = createEnemyCard(player);
   state.battle = {
@@ -2527,9 +2796,16 @@ function checkBattleEnd() {
 }
 
 function gainXp(card, amount) {
+  if ((card.level ?? 1) >= MAX_CARD_LEVEL) {
+    card.level = MAX_CARD_LEVEL;
+    card.xp = 0;
+    card.progression = normalizeCardProgression(card);
+    return;
+  }
   card.xp += amount;
   let threshold = xpThreshold(card.level);
-  while (card.xp >= threshold) {
+  const startingLevel = card.level;
+  while (card.xp >= threshold && card.level < MAX_CARD_LEVEL) {
     card.xp -= threshold;
     card.level += 1;
     const rng = mulberry32(hashString(`${card.id}:${card.level}:growth`));
@@ -2545,6 +2821,63 @@ function gainXp(card, amount) {
     }
     threshold = xpThreshold(card.level);
     pushLog(`${card.name} 升到 Lv.${card.level}`);
+  }
+  if (card.level >= MAX_CARD_LEVEL) {
+    card.level = MAX_CARD_LEVEL;
+    card.xp = 0;
+  }
+  const reachedMilestones = getEvolutionMilestonesReached(startingLevel, card.level);
+  if (reachedMilestones.length) {
+    card.progression = normalizeCardProgression(card);
+    const existingKeys = new Set(card.progression.pendingEvolutionMilestones.map((milestone) => milestone.key));
+    const completedKeys = new Set(card.progression.completedEvolutionMilestones.map((milestone) => milestone.key));
+    card.progression.pendingEvolutionMilestones = [
+      ...card.progression.pendingEvolutionMilestones,
+      ...reachedMilestones
+        .filter((milestone) => !existingKeys.has(milestone.key) && !completedKeys.has(milestone.key))
+        .map((milestone) => ({
+          ...milestone,
+          reachedAtLevel: card.level,
+          reachedAt: new Date().toISOString()
+        }))
+    ];
+    for (const milestone of reachedMilestones) {
+      pushLog(`${card.name} 達到 ${milestone.label} 條件`);
+    }
+    createMilestoneBranchChoices(card, reachedMilestones);
+  }
+  card.progression = normalizeCardProgression(card);
+}
+
+function createMilestoneBranchChoices(card, reachedMilestones) {
+  for (const milestone of reachedMilestones) {
+    for (const slot of milestone.branchSlots ?? []) {
+      const choiceId = `branch_${slot}_${milestone.key}`;
+      const progression = normalizeCardProgression(card);
+      const alreadyPending = progression.pendingChoices.some((choice) => choice.choiceId === choiceId);
+      const alreadyCompleted = progression.progressionTransactions.some((transaction) => {
+        return transaction.reason === "skill_branch_chosen" && transaction.detail?.choiceId === choiceId;
+      });
+      if (alreadyPending || alreadyCompleted) continue;
+
+      const options = buildSkillBranchOptions({
+        battleCard: card,
+        slot,
+        milestone
+      });
+
+      try {
+        card.progression = createPendingBranchChoice(progression, {
+          slot,
+          choiceId,
+          options,
+          reason: `${milestone.key}_branch_choice`
+        });
+        pushLog(`${card.name} 解鎖 ${milestone.label}：${slot} 分支選擇`);
+      } catch (error) {
+        console.warn("Failed to create milestone branch choice.", error);
+      }
+    }
   }
 }
 
@@ -2645,15 +2978,182 @@ function createEnemyArt(archetype, seed) {
   return canvas.toDataURL("image/jpeg", 0.82);
 }
 
+function renderBranchChoiceModal() {
+  const selected = getSelectedCard();
+  const selectedChoice = getRequiredBranchChoice(selected);
+  if (selected && selectedChoice) {
+    openBranchChoiceModalForCard(selected, selectedChoice);
+    return;
+  }
+
+  const pendingCard = state.deck.find((card) => getRequiredBranchChoice(card));
+  if (pendingCard) {
+    const choice = getRequiredBranchChoice(pendingCard);
+    state.selectedCardId = pendingCard.id;
+    openBranchChoiceModalForCard(pendingCard, choice);
+    return;
+  }
+
+  hideBranchChoiceModal();
+}
+
+function openBranchChoiceModalForCard(card, choice) {
+  if (!card || !choice) return;
+  const modalKey = `${card.id}:${choice.choiceId}`;
+  state.activeBranchChoiceCardId = card.id;
+  state.activeBranchChoiceId = choice.choiceId;
+  els.branchChoiceTitle.textContent = `${card.name} 進化分支`;
+  els.branchChoiceSubtitle.textContent = `Lv.${card.level} / ${getSlotLabel(choice.slot)} 必須選擇一條成長路線`;
+  els.branchChoiceSlot.textContent = getSlotLabel(choice.slot);
+  els.branchChoiceOptions.innerHTML = choice.options.map(renderBranchOption).join("");
+  els.branchChoiceNote.textContent = "選擇後會保存到本機卡牌資料；之後的進化卡圖與技能成長會使用這條路線。";
+  els.branchChoiceModal.hidden = false;
+  document.body.classList.add("modal-open");
+
+  if (state.activeBranchChoiceKey !== modalKey) {
+    state.activeBranchChoiceKey = modalKey;
+    requestAnimationFrame(() => {
+      els.branchChoiceOptions.querySelector("[data-branch-id]")?.focus();
+    });
+  }
+}
+
+function hideBranchChoiceModal() {
+  els.branchChoiceModal.hidden = true;
+  document.body.classList.remove("modal-open");
+  state.activeBranchChoiceKey = "";
+  state.activeBranchChoiceCardId = null;
+  state.activeBranchChoiceId = null;
+}
+
+function renderBranchOption(option) {
+  const statPreview = Object.entries(option.statBiasPreview ?? {})
+    .map(([key, value]) => `<b>${escapeHtml(formatStatKey(key))} ${formatSignedNumber(value)}</b>`)
+    .join("");
+  const effectPreview = Array.isArray(option.effectPreview) && option.effectPreview.length
+    ? option.effectPreview.slice(0, 3).map((item) => `<li>${escapeHtml(formatEffectPreview(item))}</li>`).join("")
+    : "<li>保留原技能方向</li>";
+  const source = option.sourceLabel || option.source || "分支來源";
+
+  return `
+    <button class="branch-option" type="button" data-branch-id="${escapeHtml(option.branchId)}">
+      <span class="branch-option-source">${escapeHtml(source)}</span>
+      <strong class="branch-option-title">${escapeHtml(option.label)}</strong>
+      <span class="branch-option-text">${escapeHtml(option.shortText)}</span>
+      <span class="branch-option-section">
+        <span>Effect Preview</span>
+        <ul>${effectPreview}</ul>
+      </span>
+      <span class="branch-option-section">
+        <span>Stat Bias</span>
+        <span class="branch-stat-list">${statPreview || "<b>Identity +1</b>"}</span>
+      </span>
+      <span class="branch-tradeoff">${escapeHtml(option.tradeoffPreview || "保留角色原有特色。")}</span>
+    </button>
+  `;
+}
+
+function handleBranchChoiceClick(event) {
+  const button = event.target.closest("[data-branch-id]");
+  if (!button) return;
+
+  const card = state.deck.find((item) => item.id === state.activeBranchChoiceCardId);
+  if (!card) return;
+  const choice = getRequiredBranchChoice(card);
+  if (!choice || choice.choiceId !== state.activeBranchChoiceId) return;
+
+  const selectedOption = choice.options.find((option) => option.branchId === button.dataset.branchId);
+  if (!selectedOption) return;
+
+  try {
+    card.progression = chooseSkillBranch(card.progression, {
+      choiceId: choice.choiceId,
+      branchId: selectedOption.branchId,
+      now: new Date().toISOString()
+    });
+    persistDeck();
+    setStatus(`已選擇 ${selectedOption.label}`);
+    renderCard(card);
+    renderDeck();
+    renderBattle();
+  } catch (error) {
+    console.error(error);
+    setStatus(error.message || "分支選擇失敗");
+  }
+}
+
+function getRequiredBranchChoice(card) {
+  if (!card) return null;
+  card.progression = normalizeCardProgression(card);
+  const choices = (card.progression.pendingChoices ?? []).filter((choice) => {
+    return choice.type === "skillBranch" && choice.required;
+  });
+  if (!choices.length) return null;
+
+  if (card.progression.progressionLock?.reason === PROGRESSION_LOCK_REASONS.PENDING_BRANCH_CHOICE) {
+    const lockedChoice = choices.find((choice) => choice.choiceId === card.progression.progressionLock.choiceId);
+    if (lockedChoice) return lockedChoice;
+  }
+
+  return choices[0];
+}
+
+function getSlotLabel(slot) {
+  const labels = {
+    active0: "主動技能一",
+    active1: "主動技能二",
+    trait0: "戰鬥特性一",
+    trait1: "戰鬥特性二",
+    ultimate: "大招"
+  };
+  return labels[slot] ?? "技能分支";
+}
+
+function formatEffectPreview(item) {
+  const path = formatEffectPath(item?.path);
+  if (Object.prototype.hasOwnProperty.call(item ?? {}, "add")) {
+    return `${path} ${formatSignedNumber(item.add)}`;
+  }
+  if (Object.prototype.hasOwnProperty.call(item ?? {}, "set")) {
+    return `${path} -> ${String(item.set)}`;
+  }
+  return path;
+}
+
+function formatEffectPath(path) {
+  const value = String(path ?? "");
+  if (value.includes("cooldown")) return "冷卻";
+  if (value.includes("gainUltimateCharge") || value.includes("ultimateCharge")) return "大招充能";
+  if (value.includes("damage") || value.includes("ratio")) return "傷害倍率";
+  if (value.includes("shield")) return "護盾";
+  if (value.includes("heal")) return "治療";
+  if (value.includes("buff")) return "增益";
+  if (value.includes("debuff")) return "干擾";
+  if (value.includes("condition")) return "觸發條件";
+  if (value.includes("identityHooks")) return "角色連結";
+  return "技能效果";
+}
+
+function formatStatKey(key) {
+  return statLabels[key] ?? cardStatLabels[key] ?? key.toUpperCase();
+}
+
+function formatSignedNumber(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return String(value);
+  return numeric > 0 ? `+${numeric}` : String(numeric);
+}
+
 function renderBattle() {
   const battle = state.battle;
   const selected = getSelectedCard();
-  els.startBattleButton.disabled = !selected;
+  const pendingChoice = getRequiredBranchChoice(selected);
+  els.startBattleButton.disabled = !selected || Boolean(pendingChoice);
 
   if (!battle) {
     renderFighter(els.playerFighter, selected ? cloneFighter(selected) : null, "Player");
     renderFighter(els.enemyFighter, null, "CPU");
-    els.battleState.textContent = selected ? "可開戰" : "未選擇";
+    els.battleState.textContent = pendingChoice ? "待選分支" : selected ? "可開戰" : "未選擇";
     setBattleButtons(false);
     if (!els.battleLog.children.length) {
       els.battleLog.innerHTML = "";
@@ -2715,10 +3215,37 @@ function persistDeck() {
 
 function loadDeck() {
   try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "[]");
+    const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "[]");
+    if (!Array.isArray(parsed)) return [];
+    return parsed.map(migrateLoadedCard).filter(Boolean);
   } catch {
     return [];
   }
+}
+
+function migrateLoadedCard(card) {
+  if (!card || typeof card !== "object") return null;
+  const migrated = { ...card };
+  migrated.progression = normalizeCardProgression(migrated);
+  return migrated;
+}
+
+function normalizeCardProgression(card, overrides = {}) {
+  const progression = normalizeProgressionState(card.progression, {
+    cardId: overrides.cardId ?? card.id,
+    level: card.level ?? 1,
+    xp: card.xp ?? 0,
+    wins: card.wins ?? 0,
+    losses: card.losses ?? 0,
+    battles: (card.wins ?? 0) + (card.losses ?? 0),
+    currentArtUrl: card.imageDataUrl ?? card.aiPortraitDataUrl ?? null,
+    provider: card.imageGeneration?.provider ?? card.imageGeneration?.mode ?? null
+  });
+  const validation = validateProgressionState(progression);
+  if (!validation.ok) {
+    console.warn("Invalid progression state normalized with warnings:", validation.errors);
+  }
+  return progression;
 }
 
 function readFileAsDataUrl(file) {

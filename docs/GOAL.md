@@ -40,15 +40,15 @@
 目前系統驗證目標是 iOS 與 Mac，但兩者分工不同：
 
 - iOS：優先驗證拍照、上傳、預覽、卡牌操作與遊戲體驗。
-- Mac：優先驗證本地 AI 推論、ComfyUI、開源模型、圖片生成與開發伺服器。
+- Mac：優先驗證本地照片分析、VLM 語意標籤、Prompt Builder、外部圖片 API adapter、卡牌合成與開發伺服器。
 
-第一版不把 SDXL、FaceID、ComfyUI 這類重模型放進 iPhone 內跑。MVP 先採用：
+第一版不把 SDXL、FaceID、ComfyUI、MFLUX 這類重模型放進 iPhone 內跑。MVP 先採用：
 
 ```text
 iPhone 或 Mac Browser
   -> 拍照 / 上傳照片
   -> Mac 本機 Node server
-  -> Mac 本機 ComfyUI + 開源模型
+  -> Google Gemini / Nano Banana API 或本機 Canvas fallback
   -> 回傳卡圖
   -> Browser 組成卡牌與數值
 ```
@@ -89,6 +89,7 @@ AI 不能直接決定遊戲規則。模型可以讀字、觀察非敏感照片�
 - 由照片細節與 User 資訊轉換出的 Traits。
 - 由規則層產生的 Skills。
 - 可被養成系統改變的成長狀態，例如 XP、Level、勝敗紀錄。
+- 養成回饋採用完整方向：數值提升、技能強化、技能分支進化、卡面視覺進化。角色最高等級為 Lv.100，進化節點採神奇寶貝式節奏：Lv.16、Lv.36、Lv.70、Lv.100。MVP 的「跑通」必須包含實際 Visual Evolution 生圖：升級觸發進化後，先讓玩家選 Skill Branch，再用 Character Spec、Progression State、Branch hooks 和來源圖/前一版卡圖建立 Evolution Prompt Profile，送到 Card Art Provider 生成進化卡圖並保存為新 art revision。Skill Branch 選項來源已確認採 D：每次分支選擇固定提供一個 `combatVariant` 路線與一個照片/VLM/故事 `characterHook` 路線。卡框、光效、徽章只能作為輔助呈現或失敗 fallback，不能單獨算進化完成。
 
 比喻：照片和 User 資訊不是貼紙，而是角色的 DNA。卡圖、能力值、技能、養成路線都要從這份 DNA 長出來。
 
@@ -99,6 +100,24 @@ AI 不能直接決定遊戲規則。模型可以讀字、觀察非敏感照片�
 - Capture Context：拍攝時間、概略地點、天氣、場所類型。
 
 角色背景提問初稿記錄在 [CHARACTER_QUESTIONS.md](./CHARACTER_QUESTIONS.md)。
+
+`Character Spec` 的詳細定義記錄在 [CHARACTER_SPEC.md](./CHARACTER_SPEC.md)。目前 Character Spec 的主要來源包含：原拍照的時間與 Location Reference、User 問卷內容、VLM/OCR/Photo Analysis 產生的 Vision Context、以及根據當地時間與地點整理出的 Event Context。這些來源會同時影響圖片生成與遊戲規則：圖片端透過 `Prompt Profile`，規則端透過 deterministic Rule Tables，例如 `Event Combat Profile`。精確位置、敏感資訊與未確認事件不能直接丟給圖片模型，也不能讓 AI 直接決定 stats 或 skills。
+
+目前已實作第一個 Character Spec context module：[`src/card-generation/character-spec.js`](../src/card-generation/character-spec.js)。它會整理 Capture / Questionnaire / Vision / Event Context，定義 GPS、地址、Google Maps place、節日來源的取得方法，並輸出圖片模型可直接使用的 Prompt Hooks。`src/card-generation/rule-data.js` 也已包含 event/season combat profiles，讓節慶與季節能影響 stats、traits、archetype bias、skills、lore 與卡圖 motif。完整產卡流程仍會在後續小步驟從 `app.js` 繼續拆成深模組。
+
+除了問卷欄位以外，Capture / Event Context 會自動取得：上傳 JPEG 先讀 EXIF 拍攝時間與 GPS；沒有 EXIF GPS 時使用 Browser Geolocation；server 端透過 Google Geocoding / Places 解析地址與 Google Maps place。節慶事件目前先固定做美國 public holidays，使用生成當下的現實世界日期查 Nager.Date，不使用舊照片 EXIF 日期。沒有 Google Maps key 時不產生 Google Maps URL fallback，只用內部地點 hook 保持生成流程可跑，避免增加使用者操作成本。
+
+目前處理順序：
+
+1. 先處理 `GOOGLE_MAPS_API_KEY`，讓自動地址、Google Place、place type 穩定。
+2. 接著處理問卷產品決策：一般角色欄位改成 VLM Creative Roll + User 4 選 1 + VLM-auto reviewable fields；敏感資訊仍只能由 User 明確提供，不能由系統自動推測。
+3. 最後再處理 Gemini / OpenAI 生圖 API key，用穩定的 Character Spec 和 prompt hooks 去比較圖片品質。
+
+問卷產品決策的 current schema 已建立在 [`src/card-generation/questionnaire-schema.js`](../src/card-generation/questionnaire-schema.js)。它定義了 `VLM Creative Roll`：年齡印象、價值觀、弱點由 VLM 各產生 4 個候選，未來用逐步彈窗讓 User 選 1 個；價值觀候選需要一句角色敘事，不顯示 VLM tags；故事事件由 VLM 產生 4 個候選後由系統 seed 隨機選 1 個；身份/背景、性格、專長、戰鬥風格、招牌物品、卡面氣質由 VLM 自動產生並可 review。所有欄位都要說明如何影響 Character Spec、prompt hooks、stats、traits、skills。Capture / Event Context 不再放進問卷，已由自動化流程處理。
+
+第一個候選生成模組已建立在 [`src/card-generation/questionnaire-candidates.js`](../src/card-generation/questionnaire-candidates.js)，server 入口是 `POST /api/questionnaire-candidates`。它會優先請本機 VLM 產生 4 選 1 候選與 VLM-auto 欄位；如果 VLM 失敗，回傳 deterministic safe fallback，確保遊戲流程不中斷。這個 endpoint 只產生候選，不替 User 選答案，也不能直接決定 stats。
+
+目前 UI 決策：拍照或上傳後先跳出角色名字輸入；空白預設 `路人`。生成出的 Battle Card name 必須包含這個名字，例如 `潮流昶志` 或 `陽光球員昶志`。Character Roll 選項未來做成彈窗，不在當前主畫面加常駐問卷 UI。
 
 敏感資訊規則：
 
@@ -130,7 +149,7 @@ MVP 的目標路線是：優先研究並接上本機 Picture generation；如果
 
 目前狀態：專案已加入 ComfyUI 本機連線檢查與 `/api/comfy-card-art` adapter。這台 Mac Air 已可啟動本機 ComfyUI，使用 MPS 裝置，並已用 `docs/comfyui-workflows/sdxl-turbo-img2img-api.json` 和 SDXL Turbo checkpoint 成功產出 768x1024 PNG smoke image。該 plain img2img baseline 與原圖差異太大，已明確拒絕作為本人相似度或美術品質基準，只保留為 adapter smoke test；`docs/comfyui-workflows/sdxl-turbo-faceid-img2img-api.json` 已接上 IP-Adapter FaceID 並成功產出有效 PNG，相似度比 rejected baseline 好，但目前仍太像照片修飾，不像最終戰鬥卡圖。`docs/comfyui-workflows/sdxl-turbo-faceid-txt2img-api.json` 有較強美術化潛力，但肢體與手部不穩。結論是：SDXL Turbo / FaceID 路線只保留為歷史 baseline，不再作為最高優先調參方向。
 
-新的最高優先本地生圖實驗改為 `Flux Kontext GGUF`：主模型優先測 `FLUX.1-Kontext-dev-GGUF Q4_K_M`，文字模型優先測 `t5-v1_1-xxl-encoder Q4_K_M`，再搭配 Flux 所需的 `CLIP-L` 與 `AE/VAE`。選它的原因是 Kontext 是 image-to-image / editing 類型，語意上更接近本遊戲「從真實照片保留本人特徵並重做角色圖」的核心需求。這條路線目前只作本地研究，因為 Flux dev / Kontext dev 授權是 non-commercial。Workflow placeholder 規格記錄在 [comfyui-workflows/README.md](./comfyui-workflows/README.md)。這仍是技術驗證，不是最終美術方向。
+曾經測過 `Flux Kontext GGUF` 作為 ComfyUI 路線，但在這台 Mac Air 上速度不符合遊戲體驗：`880x1184`、4 steps 的預覽約 12m34s。MFLUX / MLX 也被判定不適合作為當前 MVP 主線，因為高品質且保留本人特徵的本地生圖對這台硬體仍然太勉強。因此新的最高優先生圖實驗改為雲端 `Card Art Provider`：先接 `Google Gemini / Nano Banana API` 與 `OpenAI Image API`，用同一張來源照片與同一份 prompt 做比較。Mac 先負責照片分析、VLM 語意標籤、Prompt Builder、遊戲規則與卡牌合成；圖片生成交給外部 API。這仍是技術驗證，不是最終美術方向。完整研究記錄在 [LOCAL_IMAGE_GENERATION.md](./LOCAL_IMAGE_GENERATION.md)。
 
 目前開發焦點收斂為圖片生成 pipeline 與效果驗收：
 
@@ -146,7 +165,7 @@ Source Photo
 
 敵人資料、戰鬥系統、養成、Deck balance 先暫停。等一張本地生成圖通過 [IMAGE_PIPELINE_ACCEPTANCE.md](./IMAGE_PIPELINE_ACCEPTANCE.md) 的 likeness、照片語意、乾淨角色圖層與卡圖潛力驗收後，再恢復下游玩法。
 
-目前順序：先把 `Visible Semantic Tags` 做到 VLM 可產生、可人工確認、可分組、可進 prompt 的高階滿意版本，並把圖片生成最高優先實驗切到 `Flux Kontext GGUF`。人工輸入只作為 VLM adapter 完成前的校準與覆寫，不是最終玩家流程。原因是如果照片語意輸入不穩，換模型後也無法判斷失敗原因。
+目前順序：先把 `Visible Semantic Tags` 做到 VLM 可產生、可人工確認、可分組、可進 prompt 的高階滿意版本，並把圖片生成最高優先實驗切到雲端 `Card Art Provider`，先比較 `Gemini / Nano Banana API` 與 `OpenAI Image API`。人工輸入只作為 VLM adapter 完成前的校準與覆寫，不是最終玩家流程。原因是如果照片語意輸入不穩，換模型後也無法判斷失敗原因。
 
 ## UI 方向
 

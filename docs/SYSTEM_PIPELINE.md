@@ -63,14 +63,14 @@ iPhone / iPad / Mac Browser
 
 Mac local server
   -> Node app adapter
-  -> ComfyUI
-  -> open-source image generation models
+  -> Card Art Provider adapter
+  -> Gemini / Nano Banana API, OpenAI Image API, or Canvas fallback
   -> generated Card Cover response
 ```
 
 For the MVP, iOS is the capture and interaction client. The Mac is the local AI workstation.
 
-Do not plan the first iOS build around running SDXL, FaceID, or ComfyUI on-device. Later product paths can include a Godot iOS client, a native Swift client, a React Native wrapper, cloud generation, or small Core ML models, but those should come after the local browser pipeline proves the card-generation loop.
+Do not plan the first iOS build around running SDXL, FaceID, MFLUX, or ComfyUI on-device. Later product paths can include a Godot iOS client, a native Swift client, a React Native wrapper, cloud generation, or small Core ML models, but those should come after the local browser pipeline proves the card-generation loop.
 
 ## Top-Level Flow
 
@@ -84,7 +84,8 @@ Source Photo
   -> OCR / Text Seed Adapter
   -> Model Suggestion Review
 
-User Questionnaire
+VLM Creative Roll + Character Setup Review
+  -> Character Name Seed + user-selected candidates + system story pick + VLM-auto fields
   -> Generation Profile
 
 Photo Analysis + Generation Profile + Capture Context + Reroll Seed
@@ -152,8 +153,8 @@ Rules:
 | Photo Signal Analyzer | Local algorithm/model | Source Photo | Photo Analysis | Canvas metrics and palette | Identify the real person |
 | OCR / Text Seed Adapter | Model or fallback | Source Photo, manual text | Text Seed, OCR suggestions | Manual text first, local OCR later | Treat OCR as legal truth |
 | Model Suggestion Review | UI | Suggested visible tags | Confirmed suggestions | Editable chips later | Hide model assumptions |
-| User Questionnaire | UI | Player answers | Generation Profile, User-Supplied Context, Capture Context | Hidden defaults in the card generator; separate setup/review flow later | Ask sensitive questions by default |
-| Normalizer | Rule module | Raw answers, suggestions | Normalized tags | Trim, cap, map to known categories | Let free text directly boost stats |
+| Character Setup Review | UI + VLM | Character Name Seed, VLM Creative Roll, player candidate choices, system story pick, reviewable auto fields | Generation Profile and Questionnaire Context | Name popup now; four-option candidate modal later | Ask users to fill a long form or hide model assumptions |
+| Normalizer | Rule module | Selected candidates, VLM-auto fields, optional user declarations | Normalized tags | Trim, cap, map to known categories | Let free text directly boost stats |
 | Character Spec Builder | Rule module | Photo Analysis, Generation Profile, normalized tags, reroll seed | Character Spec | Deterministic local rules | Call image generation |
 | Character Form Branch Router | Rule module | Character Spec, Generation Profile, approved form option | Character Form Branch and branch constraints | Deterministic branch choice; current branches are `humanlike`, `animalized`, and `objectified` | Hide branch choice inside a free-form prompt |
 | Rule / Algorithm Layer | Rule module | Character Spec, progression | Card Stat Line, traits, skills, rarity | Capped formulas | Let AI write final numbers |
@@ -178,13 +179,13 @@ The project should not install every model at once. Each model must sit behind a
 |---|---|---|---|---|
 | Photo Signal Analyzer | Current browser Canvas analysis | Compute brightness, contrast, saturation, palette, edge density, center focus, symmetry | Add Transformers.js zero-shot image classification or a small VLM | Deterministic, no install, low risk |
 | OCR / Text Seed Adapter | Manual Text Seed first | Let user type visible text or symbols from the photo | PaddleOCR PP-OCRv6 or PP-OCRv5 mobile on CPU | OCR is useful, but not required before Character Spec rules work |
-| Vision Suggestions | No open-ended VLM in first UI | Start from deterministic Photo Signal only | FastVLM 0.5B/1.5B or Qwen2.5-VL-3B for suggested visible tags | VLM suggestions need review UI and guardrails |
+| Vision Suggestions | Local Ollama VLM adapter | Generate visible, non-sensitive semantic tags from center subject crop plus full image context | FastVLM 0.5B/1.5B or Qwen2.5-VL-3B if Ollama quality/speed is not enough | The user should not hand-write most semantic tags, but VLM output must remain reviewable |
 | Text Normalizer | Deterministic rule tables | Map free text to known categories and capped tags | Optional small local LLM through Ollama for draft suggestions only | Rules must remain explainable and testable |
 | Character Spec Builder | No AI model | Deterministic JavaScript rule module | Versioned rule tables | This is the game's core rule system |
 | Rule / Algorithm Layer | No AI model | Formula + capped modifiers + skill templates | Data-driven skill effect interpreter | AI must not write final stats |
 | Card Art Prompt Builder | No AI model | Build prompts from Character Spec and approved inputs | Prompt templates by card mood and archetype | Keeps visual generation controlled |
-| Card Art Adapter | Canvas fallback plus ComfyUI adapter | Current local render keeps the full game loop working; ComfyUI tests local picture generation | ComfyUI + SDXL-Lightning or another fast SDXL checkpoint + IP-Adapter reference image workflow | Best first serious local image generation path |
-| Stronger Identity Preservation | Current research target | Use consent-based reference conditioning through IP-Adapter FaceID, while keeping source photo out of saved battle state by default | Research InstantID / better FaceID workflows only after consent/license review | Stronger identity tools are powerful but higher privacy/license risk |
+| Card Art Adapter | Canvas fallback plus cloud provider adapter | Current local render keeps the full game loop working; Gemini / Nano Banana and OpenAI test high-quality picture generation through one provider interface | Cloud adapter hardening, retry/queue, cost controls, or a later local model if hardware improves | Best next serious image generation path after local Flux-family generation was too slow |
+| Stronger Identity Preservation | Current research target | Use the source photo as a consent-based reference and feed VLM identity cues into the prompt, while keeping source photo out of saved battle state by default | Research FaceID/InstantID only after consent/license/privacy review | Stronger identity tools are powerful but higher privacy/license risk |
 | Battle Simulator | No AI model | Local deterministic CPU battle | Data-driven effects and seeded RNG | Battle must be reproducible |
 
 ### OCR Adapter Plan
@@ -547,8 +548,9 @@ Current interpretation:
 Research-only image paths:
 
 - Draw Things: best for manual style testing on Mac before code integration.
-- MFLUX: promising Mac-native MLX path for later scripted experiments.
-- FLUX.1-schnell / newer FLUX-family models: strong quality, but test only after the pipeline is stable.
+- Gemini / Nano Banana API and OpenAI Image API: active quality lanes for source-photo-to-character-art generation.
+- MFLUX: paused Mac-native MLX research path; revisit only if hardware or model speed improves.
+- FLUX.1-schnell / newer FLUX-family models: strong quality, but test only through a controlled local adapter after the pipeline is stable.
 - InstantID or other FaceID-style workflows: only after explicit consent, license review, and a privacy decision because these are identity-preserving face workflows.
 
 ### Card Art Prompt Profile
@@ -573,7 +575,7 @@ Prompt rules:
 
 - `Character Spec` is the source of truth.
 - Source Photo guides broad likeness and visual cues.
-- User answers guide costume, props, aura, background, and mood.
+- User-selected VLM candidates and VLM-auto fields guide costume, props, aura, background, and mood.
 - Generated image output cannot modify stats or skills.
 - Do not put final `HP / ATK / DEF / COST` text inside the generated image; render it in UI for legibility and localization.
 
@@ -594,6 +596,8 @@ Current source links:
 - SDXL-Lightning model card: https://huggingface.co/ByteDance/SDXL-Lightning
 - IP-Adapter project: https://github.com/tencent-ailab/IP-Adapter
 - ComfyUI IPAdapter reference node: https://github.com/comfyorg/comfyui-ipadapter
+- Gemini image generation: https://ai.google.dev/gemini-api/docs/image-generation
+- OpenAI image edits: https://platform.openai.com/docs/api-reference/images/createEdit
 - MFLUX Mac-native generation: https://github.com/mflux-community/mflux
 - Draw Things local Mac/iOS image generation: https://drawthings.ai/
 - FLUX.1-schnell model card: https://huggingface.co/black-forest-labs/FLUX.1-schnell
@@ -697,11 +701,11 @@ Rule / Algorithm layer:
 
 1. Confirm this pipeline document.
 2. Add the first questionnaire fields from `CHARACTER_QUESTIONS.md`. Prototyped, then moved out of the main generator UI in favor of a card-first screen.
-3. Make the current app produce and show the fuller `Character Spec`. Partially done; advanced defaults still enter `generationProfile`, `userSuppliedContext`, and `captureContext`.
+3. Make the current app produce and show the fuller `Character Spec`. First context pass done: `src/card-generation/character-spec.js` now normalizes Capture / Questionnaire / Vision / Event Context and builds image prompt hooks.
 4. Add visible `HP / ATK / DEF / COST / Level` to the generated card and saved card list. First pass done.
 5. Add explainable rule output: why the card got its element, stats, traits, and skills.
 6. Correct save behavior so raw Source Photo is not required for saved Battle Cards.
-7. Extract `buildCharacterSpec` from `app.js` into its own module.
+7. Extract `buildCharacterSpec` from `app.js` into its own module. First pass done for context normalization and prompt hooks; rules for archetype, rarity, stats, traits, and skills still need extraction.
 8. Add a Card Art Adapter seam with Canvas fallback first.
 9. Research or connect a local picture generation adapter after the gameplay pipeline is stable.
 10. Expand Battle Simulator rules after cards have stable stats and skills.
@@ -714,11 +718,12 @@ Rule / Algorithm layer:
 | Consent Gate | Removed from generator screen | Add game-entry consent/onboarding later |
 | Photo Signal Analyzer | Exists as local canvas analysis | Keep and isolate later |
 | OCR adapter | Not real yet | Manual Text Seed first, local OCR later |
-| Questionnaire | Hidden defaults in generator screen | Add separate setup/review UX and model-suggested editable chips later |
-| Character Spec | Exists and now stores advanced profile/context fields, but still mixed inside `app.js` | Make schema clearer, then extract |
+| Automatic Capture/Event Context | Browser/EXIF GPS, server `/api/capture-context`, Google Maps adapters when keyed, internal no-key location-hook fallback, and Nager.Date holiday lookup exist | Add first-entry consent/onboarding UI and API-key status display |
+| Questionnaire | Hidden defaults in generator screen; still user-declared by policy | Add separate setup/review UX and model-suggested editable chips later |
+| Character Spec | First context module exists in `src/card-generation/character-spec.js`; `app.js` now stores `contexts`, `promptProfile`, `sourceRefs`, and acquisition methods on each spec | Extract remaining archetype, rarity, stats, traits, and skills from `app.js` |
 | Rule / Algorithm layer | Exists inside character generation functions | Separate from UI and image generation |
 | Card Stat Line | First visible HP/ATK/DEF/COST/Level exists | Tune formulas and connect more directly to battle balance |
-| Card Cover | Canvas exists, external OpenAI proxy exists, ComfyUI status smoke test exists, ComfyUI image upload/workflow submission adapter exists, SDXL Turbo img2img smoke workflow generated a valid PNG, and IP-Adapter FaceID workflow generated valid PNGs with better likeness but too-photographic style | Keep FaceID conditioning, then test a stronger stylized checkpoint or style LoRA before final art-direction judgment |
+| Card Cover | Canvas exists, unified `/api/card-art` provider adapter exists for Gemini/OpenAI/Comfy, `/api/card-art-compare` exists for explicit A/B runs, ComfyUI status smoke test exists, SDXL Turbo img2img smoke workflow generated a valid PNG, and IP-Adapter FaceID workflow generated valid PNGs with better likeness but too-photographic style | Compare Gemini and OpenAI outputs against the same prompt and image acceptance gates |
 | Save System | localStorage exists | Stop requiring raw Source Photo by default |
 | Progression | XP/level/win/loss exists | Connect growth rules to Character Spec |
 | Battle Simulator | Exists as local CPU battle | Make it depend only on Battle Card |

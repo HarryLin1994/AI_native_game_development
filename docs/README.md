@@ -24,13 +24,25 @@ This folder holds the project memory for the AI-native card game MVP. Use this p
   - Top-level product pipeline and model stack from consent and photo intake to Character Spec, card art, save, progression, and battle.
   - Read this before splitting modules, adding AI adapters, changing storage, or deciding the next implementation step.
 
+- [CARD_GENERATION_MECHANISM.md](./CARD_GENERATION_MECHANISM.md)
+  - Deterministic card-generation rules: inputs, outputs, rule stages, provider boundary, and module split plan.
+  - Read this before changing archetypes, rarity, stats, traits, skills, prompt rules, or card-generation modules.
+
+- [SKILL_SYSTEM.md](./SKILL_SYSTEM.md)
+  - Confirmed and open decisions for Combat Core, Combat Variant, Skill Kit, progression hooks, and battle feedback.
+  - Read this before changing generated skills, combat identity, skill effects, or battle-role naming.
+
+- [CHARACTER_SPEC.md](./CHARACTER_SPEC.md)
+  - Canonical Character Spec definition: source contexts, acquisition methods, schema, field responsibility, prompt policy, and implemented prompt-hook module interface.
+  - Read this before adding questionnaire fields, capture context, event context, VLM fields, or prompt hooks.
+
 - [photo-to-character-mental-model.md](./photo-to-character-mental-model.md)
   - Mental model for `Source Photo -> Photo Analysis -> Character Spec -> Card Cover -> Battle Card`.
   - Read this before changing the photo-to-character pipeline or splitting modules.
 
 - [LOCAL_IMAGE_GENERATION.md](./LOCAL_IMAGE_GENERATION.md)
   - Local image generation strategy for MacBook Air M3 / 16 GB.
-  - Read this before working on ComfyUI, SD1.5, SDXL-Lightning, Draw Things, MFLUX, or image generation adapters.
+  - Read this before working on Gemini / Nano Banana, ComfyUI, SD1.5, SDXL-Lightning, Draw Things, MFLUX, or image generation adapters.
 
 - [IMAGE_PIPELINE_ACCEPTANCE.md](./IMAGE_PIPELINE_ACCEPTANCE.md)
   - Current photo-to-card-art focus, non-goals, input boundaries, and visual acceptance gates.
@@ -51,7 +63,7 @@ This folder holds the project memory for the AI-native card game MVP. Use this p
   - Read this before changing the generator UI, card library, character detail, or battle screen.
 
 - [CHARACTER_QUESTIONS.md](./CHARACTER_QUESTIONS.md)
-  - Draft questionnaire plus `Question Mapping` for consent, role, backstory, values, weakness, signature item, capture context, card stats, skills, and future flow.
+  - Current questionnaire decisions, VLM Creative Roll policy, four-option user choices, and `Question Mapping`; canonical schema lives in `src/card-generation/questionnaire-schema.js`.
   - Read this before changing the user question form or mapping answers to Character Spec.
 
 - [REFERENCE_GAMES.md](./REFERENCE_GAMES.md)
@@ -75,4 +87,4 @@ This folder holds the project memory for the AI-native card game MVP. Use this p
 
 ## Current Next Discussion
 
-After this README, the next product focus is validating the photo-to-card-art pipeline through [IMAGE_PIPELINE_ACCEPTANCE.md](./IMAGE_PIPELINE_ACCEPTANCE.md). Enemy data, battle tuning, progression, and final UI animation should wait until one generated visual target passes the image acceptance gates.
+After this README, the next product focus is the Card Generation Mechanism and gradual module split through [CARD_GENERATION_MECHANISM.md](./CARD_GENERATION_MECHANISM.md). Enemy data, battle tuning, progression, and final UI animation should still wait until card generation rules and image-provider comparison are stable enough to judge generated Battle Cards.

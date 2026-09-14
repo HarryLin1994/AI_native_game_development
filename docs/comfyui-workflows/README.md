@@ -37,21 +37,25 @@ __FACEIDV2_WEIGHT__    FaceID v2 identity embedding strength; optional
 
 The workflow should output at least one image through a normal ComfyUI save or preview image node.
 
-## Current Target
+## Current Status
 
-The lightest SDXL smoke workflow already proved that the app can talk to ComfyUI. The next serious quality target is Flux Kontext GGUF:
+The lightest SDXL smoke workflow already proved that the app can talk to ComfyUI. SDXL Turbo / FaceID workflows remain useful as historical baselines and adapter tests.
+
+ComfyUI Flux Kontext GGUF was tested and paused because it was too slow for the local MVP loop on this Mac Air. The current active quality target is the cloud Card Art Provider path, starting with Gemini / Nano Banana API and OpenAI Image API, documented in [../LOCAL_IMAGE_GENERATION.md](../LOCAL_IMAGE_GENERATION.md).
+
+The desired image-generation data shape is still:
 
 ```text
 Source Photo
   -> VLM Visible Semantic Tags
   -> Character Spec prompt
-  -> Flux Kontext image-to-image workflow
+  -> local image-generation adapter
   -> card portrait output
 ```
 
 Keep HP, ATK, DEF, COST, skill names, and readable card text outside the generated image. The game UI renders those values after the image returns.
 
-Required model research target:
+Paused ComfyUI GGUF research target:
 
 ```text
 .local-tools/ComfyUI/custom_nodes/ComfyUI-GGUF
@@ -61,7 +65,9 @@ Required model research target:
 .local-tools/ComfyUI/models/vae/ae.safetensors
 ```
 
-Download caution:
+These model files were removed after the speed test. Do not re-download them unless we explicitly decide to reopen the ComfyUI GGUF path.
+
+Download caution if reopened:
 
 ```text
 Do not download the full Flux Kontext GGUF set unless the machine has enough free disk.
@@ -202,7 +208,7 @@ Current interpretation:
 ```text
 Use this workflow only as a historical identity-preservation and believable-anatomy baseline.
 Do not treat SDXL Turbo FaceID output as final card art.
-Current quality research has moved to Flux Kontext GGUF rather than continued SDXL prompt tuning.
+Current quality research has moved to cloud provider comparison rather than continued SDXL prompt tuning.
 ```
 
 ## FaceID Reference-Only Txt2Img Workflow

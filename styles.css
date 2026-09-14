@@ -30,6 +30,10 @@ body {
   color: var(--text);
 }
 
+body.modal-open {
+  overflow: hidden;
+}
+
 button,
 input,
 select,
@@ -704,6 +708,16 @@ button:disabled {
   padding: 0.7rem 0.8rem;
 }
 
+.branch-card-alert {
+  border: 1px solid rgba(88, 199, 167, 0.42);
+  border-radius: 8px;
+  background: rgba(88, 199, 167, 0.1);
+  color: #c9f3e8;
+  line-height: 1.45;
+  margin: 0.85rem 0 0;
+  padding: 0.7rem 0.8rem;
+}
+
 .retouch-strip {
   display: grid;
   grid-template-columns: 0.56fr 1fr;
@@ -869,6 +883,10 @@ button:disabled {
   background: rgba(216, 168, 78, 0.1);
 }
 
+.deck-card.pending-branch {
+  border-color: color-mix(in srgb, var(--mint) 52%, var(--line));
+}
+
 .deck-thumb {
   width: 4.3rem;
   aspect-ratio: 1 / 1.18;
@@ -894,6 +912,18 @@ button:disabled {
   color: var(--muted);
   font-size: 0.82rem;
   margin-top: 0.2rem;
+}
+
+.branch-pending-badge {
+  display: inline-flex;
+  width: fit-content;
+  border: 1px solid rgba(88, 199, 167, 0.44);
+  border-radius: 999px;
+  background: rgba(88, 199, 167, 0.1);
+  color: var(--text);
+  font-size: 0.74rem;
+  font-weight: 850;
+  padding: 0.2rem 0.46rem;
 }
 
 .deck-statline {
@@ -923,6 +953,166 @@ button:disabled {
 .delete-button {
   min-width: 2.6rem;
   padding-inline: 0.7rem;
+}
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  padding: max(1rem, env(safe-area-inset-top)) max(1rem, env(safe-area-inset-right)) max(1rem, env(safe-area-inset-bottom)) max(1rem, env(safe-area-inset-left));
+  background: rgba(5, 7, 10, 0.74);
+}
+
+.modal-overlay[hidden] {
+  display: none;
+}
+
+.branch-choice-dialog {
+  width: min(840px, 100%);
+  max-height: min(760px, 100%);
+  overflow: auto;
+  border: 1px solid color-mix(in srgb, var(--mint) 34%, var(--line));
+  border-radius: 8px;
+  background:
+    linear-gradient(180deg, rgba(88, 199, 167, 0.1), transparent 15rem),
+    #171b22;
+  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.54);
+  padding: 1rem;
+}
+
+.branch-choice-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.9rem;
+}
+
+.branch-choice-heading h2 {
+  margin: 0;
+  font-size: clamp(1.35rem, 3vw, 2rem);
+  letter-spacing: 0;
+}
+
+.branch-choice-heading p:not(.eyebrow),
+.branch-choice-note {
+  color: var(--muted);
+  line-height: 1.45;
+  margin: 0.45rem 0 0;
+}
+
+.branch-choice-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.8rem;
+}
+
+.branch-option {
+  display: grid;
+  align-content: start;
+  justify-items: stretch;
+  min-height: 18rem;
+  border-color: color-mix(in srgb, var(--mint) 28%, var(--line));
+  background:
+    linear-gradient(145deg, rgba(88, 199, 167, 0.12), rgba(93, 164, 220, 0.07)),
+    rgba(255, 255, 255, 0.045);
+  color: var(--text);
+  padding: 0.85rem;
+  text-align: left;
+  white-space: normal;
+}
+
+.branch-option:hover:not(:disabled),
+.branch-option:focus-visible {
+  border-color: var(--mint);
+  background:
+    linear-gradient(145deg, rgba(88, 199, 167, 0.18), rgba(93, 164, 220, 0.1)),
+    rgba(255, 255, 255, 0.06);
+}
+
+.branch-option-source,
+.branch-option-title,
+.branch-option-text,
+.branch-option-section,
+.branch-stat-list {
+  min-width: 0;
+}
+
+.branch-option-source {
+  color: var(--gold);
+  font-size: 0.72rem;
+  font-weight: 850;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.branch-option-title {
+  display: block;
+  margin-top: 0.35rem;
+  font-size: 1.22rem;
+  font-weight: 900;
+  overflow-wrap: anywhere;
+}
+
+.branch-option-text {
+  display: block;
+  color: var(--muted);
+  line-height: 1.45;
+  margin-top: 0.45rem;
+  overflow-wrap: anywhere;
+}
+
+.branch-option-section {
+  display: grid;
+  gap: 0.35rem;
+  margin-top: 0.75rem;
+}
+
+.branch-option-section span {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 850;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.branch-option-section ul {
+  display: grid;
+  gap: 0.28rem;
+  margin: 0;
+  padding-left: 1.05rem;
+}
+
+.branch-option-section li {
+  color: var(--text);
+  font-size: 0.84rem;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.branch-stat-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.branch-stat-list b {
+  border: 1px solid rgba(244, 240, 232, 0.18);
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.22);
+  color: var(--text);
+  font-size: 0.78rem;
+  padding: 0.24rem 0.45rem;
+}
+
+.branch-tradeoff {
+  border-top: 1px solid rgba(255, 255, 255, 0.09);
+  color: #d8c64e;
+  display: block;
+  line-height: 1.45;
+  margin-top: 0.75rem;
+  padding-top: 0.65rem;
 }
 
 @media (max-width: 1180px) {
@@ -957,6 +1147,7 @@ button:disabled {
     white-space: normal;
   }
 
+  .branch-choice-heading,
   .workspace {
     grid-template-columns: 1fr;
   }
@@ -967,8 +1158,17 @@ button:disabled {
   .retouch-strip,
   .control-grid,
   .card-actions,
-  .battle-controls {
+  .battle-controls,
+  .branch-choice-options {
     grid-template-columns: 1fr;
+  }
+
+  .branch-choice-heading {
+    display: grid;
+  }
+
+  .branch-option {
+    min-height: 0;
   }
 
   .fighters {
