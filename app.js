@@ -27,6 +27,11 @@ import {
   formatPromptHooksForImageModel
 } from "./src/card-generation/character-spec.js";
 import {
+  buildSkillMaterialProfile,
+  createLegacySkillsFromSkillKit,
+  generateSkillKit
+} from "./src/card-generation/skill-kit.js";
+import {
   createRuntimeCaptureMoment,
   extractPhotoMetadataFromFile
 } from "./src/capture-context/photo-metadata.js";
@@ -1151,8 +1156,6 @@ async function createCard(analysis, sourceImageDataUrl, reroll, generationProfil
   const stats = createStats(analysis, archetype, rarity, rng, generationProfile);
   const hpBase = 96 + Math.round(stats.guard * 1.65 + stats.focus * 0.45);
   const traits = createTraits(analysis, archetype, generationProfile);
-  const skills = createSkills(archetype, stats, traits, rng, generationProfile);
-  const cardStatLine = deriveCardStatLineFromParts({ stats, hpBase, level: 1, rarity, skills });
   const appearance = createAppearance(analysis, archetype, rng, generationProfile);
   const personality = createPersonality(analysis, rng, generationProfile);
   const combatRole = createCombatRole(stats, archetype, generationProfile);
@@ -1162,6 +1165,38 @@ async function createCard(analysis, sourceImageDataUrl, reroll, generationProfil
     generationProfile,
     captureMoment: createRuntimeCaptureMoment()
   });
+  const skillMaterialProfile = buildSkillMaterialProfile({
+    characterSpec: {
+      contexts: characterSpecContexts.contexts,
+      promptProfile: characterSpecContexts.promptProfile,
+      photoSemantics: {
+        textSeed: analysis.textSeed,
+        subjectFocus: analysis.subjectFocus,
+        visibleSemanticTags: analysis.visibleSemanticTags,
+        visibleSemanticTagGroups: analysis.visibleSemanticTagGroups,
+        source: analysis.semanticTagSource
+      }
+    },
+    analysis,
+    generationProfile
+  });
+  const skillKit = generateSkillKit({
+    characterSpec: {
+      name: title,
+      className: archetype.name,
+      element: archetype.element,
+      contexts: characterSpecContexts.contexts,
+      promptProfile: characterSpecContexts.promptProfile
+    },
+    cardStats: stats,
+    archetype,
+    traits,
+    generationProfile,
+    skillMaterialProfile,
+    rng
+  });
+  const skills = createLegacySkillsFromSkillKit(skillKit);
+  const cardStatLine = deriveCardStatLineFromParts({ stats, hpBase, level: 1, rarity, skills });
   const futureAiPrompt = createFutureImagePrompt(title, archetype, appearance, generationProfile, analysis, characterSpecContexts.promptProfile);
   const cardArtNegativePrompt = createCardArtNegativePrompt(generationProfile.characterFormBranch);
   const characterSpec = {
@@ -1174,7 +1209,8 @@ async function createCard(analysis, sourceImageDataUrl, reroll, generationProfil
     contexts: characterSpecContexts.contexts,
     promptProfile: characterSpecContexts.promptProfile,
     derived: {
-      eventCombatProfile: generationProfile.eventCombatProfile ?? resolveEventCombatProfile(generationProfile)
+      eventCombatProfile: generationProfile.eventCombatProfile ?? resolveEventCombatProfile(generationProfile),
+      skillMaterialProfile
     },
     visualPipeline: {
       retouchMode:
@@ -1213,6 +1249,10 @@ async function createCard(analysis, sourceImageDataUrl, reroll, generationProfil
     name: title,
     className: archetype.name,
     element: archetype.element,
+    combatCore: skillKit.combatIdentity.combatCore,
+    combatCoreLabel: skillKit.combatIdentity.combatCoreLabel,
+    combatVariant: skillKit.combatIdentity.combatVariant,
+    combatVariantLabel: skillKit.combatIdentity.combatVariantLabel,
     rarity: rarity.key,
     appearance,
     personality,
@@ -1221,6 +1261,8 @@ async function createCard(analysis, sourceImageDataUrl, reroll, generationProfil
     traits,
     stats,
     cardStatLine,
+    skillMaterialProfile,
+    skillKit,
     skills
   };
   let aiPortraitDataUrl = "";
@@ -1364,6 +1406,10 @@ async function createCard(analysis, sourceImageDataUrl, reroll, generationProfil
     className: archetype.name,
     element: archetype.element,
     accent: archetype.accent,
+    combatCore: skillKit.combatIdentity.combatCore,
+    combatCoreLabel: skillKit.combatIdentity.combatCoreLabel,
+    combatVariant: skillKit.combatIdentity.combatVariant,
+    combatVariantLabel: skillKit.combatIdentity.combatVariantLabel,
     rarity,
     level: 1,
     xp: 0,
@@ -1373,6 +1419,8 @@ async function createCard(analysis, sourceImageDataUrl, reroll, generationProfil
     stats,
     cardStatLine,
     traits,
+    skillKit,
+    skillMaterialProfile,
     skills,
     appearance,
     personality,

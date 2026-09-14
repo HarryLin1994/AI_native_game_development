@@ -1034,8 +1034,11 @@ The implementation can contain rule tables, pattern selection, naming, effect as
 Planned modules:
 
 ```text
+src/card-generation/skill-kit.js
+  -> first implementation of buildSkillMaterialProfile(), generateSkillKit(), validateSkillKit(), and legacy active-skill adapter
+
 src/card-generation/skill-rule-data.js
-  -> Combat Core/Variant pattern tables, name fragments, operation budgets
+  -> optional later split for Combat Core/Variant pattern tables, name fragments, operation budgets
 
 src/card-generation/skill-material.js
   -> buildSkillMaterialProfile(), VLM cue normalization, naming candidate filtering
@@ -1060,6 +1063,14 @@ src/battle/effect-interpreter.js
 ```
 
 The current `createSkills()` in `app.js` is a temporary legacy generator and should be replaced or wrapped by `generateSkillKit()` when implementation starts.
+
+Current implementation note:
+
+```text
+generateSkillKit() is now wired during card generation.
+The existing `skills` array remains as a legacy adapter for the current two-button battle UI.
+The new `skillKit` data is saved on the Battle Card and Character Spec for branch choices, future effect interpretation, and UI expansion.
+```
 
 ## Open Questions
 

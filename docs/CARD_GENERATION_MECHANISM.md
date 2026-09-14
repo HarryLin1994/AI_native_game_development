@@ -161,7 +161,7 @@ Output:
 - `derived.eventCombatProfile`: event/season rule result used by stats, traits, skills, lore, and image prompt motifs.
 - `promptProfile`: only the safe hooks allowed to reach Gemini/OpenAI/Comfy.
 
-The existing stats, rarity, traits, skills, and combat-role functions still live in `app.js`. Moving them behind the same Character Spec module is a later step.
+The existing stats, rarity, traits, legacy two-button `skills`, and combat-role functions still live in `app.js`. The first `Skill Kit` generator now lives in `src/card-generation/skill-kit.js` and writes `skillKit` beside the legacy `skills` adapter. Moving the remaining rule functions behind card-generation modules is a later step.
 
 ## Provider Boundary
 
@@ -215,7 +215,10 @@ Next modules should be split in this order:
 ```text
 src/card-generation/character-spec.js
   -> done first pass for contexts, acquisition methods, and promptProfile
-  -> next pass should absorb archetype, rarity, stats, traits, and skills
+  -> next pass should absorb archetype, rarity, stats, traits, and remaining legacy skill/card-stat glue
+
+src/card-generation/skill-kit.js
+  -> done first pass for Skill Material Profile, 2 active skills, 2 battle traits, 1 ultimate skill, effectSpec validation, and legacy `skills` adapter
 
 src/card-generation/prompt-profile.js
   -> optional later split if promptProfile grows too large
