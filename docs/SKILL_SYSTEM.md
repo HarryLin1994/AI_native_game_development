@@ -259,7 +259,106 @@ Allowed v1 operation vocabulary:
 
 The operation vocabulary should stay small until the MVP battle loop is stable.
 
-### 5. VLM Skill Influence v1
+### 5. Skill Taxonomy and Card Tabs v1
+
+Confirmed answer:
+
+```text
+Skill Taxonomy v1 = C / original system.
+```
+
+The card detail UI can reference the compact gacha card-reading pattern from Dokkan-style cards, but the skill taxonomy, trigger rules, effect vocabulary, and animation vocabulary are this project's own rules.
+
+Implementation lives in:
+
+```text
+src/card-generation/skill-taxonomy.js
+```
+
+The taxonomy is attached during `generateSkillKit()`. It does not replace `effectSpec`; it classifies existing deterministic effects and provides presentation/animation metadata for later UI work.
+
+Skill Kit presentation contract:
+
+| Tab key | Player-facing tab | Slots | Purpose |
+|---|---|---|---|
+| `active_ultimate` | `主動 / 大招` | `active0`, `active1`, `ultimate` | Shows the two Active Skills and the Ultimate Skill summary. |
+| `passive_conditions` | `被動 / 觸發` | `trait0`, `trait1` | Shows Battle Traits, trigger summaries, and trigger state. |
+| `ultimate_animation` | `大招演出` | `ultimate` | Shows the Ultimate animation plan, motif tokens, and sequence beats. |
+
+Border glow contract:
+
+| State | Class token | Meaning |
+|---|---|---|
+| active skill ready | `card-border-skill-ready` | A manual skill can be used. |
+| passive triggered | `card-border-passive-triggered` | A Battle Trait has just triggered; the card border should glow. |
+| ultimate ready | `card-border-ultimate-ready` | Charge and condition allow Ultimate use. |
+| ultimate animating | `card-border-ultimate-cinematic` | The Ultimate animation is playing. |
+
+Skill kind rules:
+
+| Skill kind | Player label | Main slots | Preferred ops | Animation |
+|---|---|---|---|---|
+| `direct_strike` | `直接打擊` | active | `damage` | `impact_slash` |
+| `burst_strike` | `爆發打擊` | active, ultimate | `damage`, `buff` | `burst_flash` |
+| `combo_drive` | `連段推進` | active, ultimate | `damage`, `gainUltimateCharge`, `cooldownChange` | `afterimage_combo` |
+| `guard_wall` | `護盾壁壘` | active, trait, ultimate | `shield`, `buff` | `barrier_raise` |
+| `recovery_pulse` | `回復脈衝` | active, trait, ultimate | `heal`, `gainUltimateCharge` | `restorative_wave` |
+| `command_aura` | `指令增幅` | active, trait, ultimate | `buff`, `gainUltimateCharge` | `command_aura` |
+| `disruption_mark` | `干擾刻印` | active, ultimate | `damage`, `debuff`, `cooldownChange` | `hex_mark` |
+| `opening_trait` | `開場特性` | trait | `triggerOnBattleStart`, `buff`, `shield` | `opening_flare` |
+| `comeback_trigger` | `逆境觸發` | trait | `triggerOnHpBelow`, `shield`, `heal`, `gainUltimateCharge` | `comeback_spark` |
+| `signature_ultimate` | `招牌大招` | ultimate | `damage`, `shield`, `heal`, `buff`, `debuff` | `signature_cinematic` |
+
+Animation rule vocabulary:
+
+| Animation key | Player label | Timeline |
+|---|---|---|
+| `impact_slash` | `衝擊斬擊` | card focus -> forward snap -> impact flash -> damage number |
+| `burst_flash` | `爆發閃光` | card charge -> aura overflow -> single heavy impact -> afterglow |
+| `afterimage_combo` | `殘影連段` | card focus -> multi afterimage -> combo hits -> charge tick |
+| `barrier_raise` | `護盾升起` | card guard pose -> barrier ring -> shield value pop |
+| `restorative_wave` | `回復波紋` | card breathe -> soft wave -> HP value pop |
+| `command_aura` | `指令氣場` | card focus -> stat glyphs -> buff rise |
+| `hex_mark` | `干擾刻印` | card focus -> mark project -> enemy glyph lock |
+| `opening_flare` | `開場亮框` | battle start flash -> card border glow -> buff rise |
+| `comeback_spark` | `逆境亮框` | HP warning -> card border pulse -> reversal spark |
+| `signature_cinematic` | `招牌演出` | ultimate cut-in -> identity hook reveal -> signature motion -> final impact -> result hold |
+
+Ultimate animation rule:
+
+```text
+Ultimate animation must use identityHooks and motifTokens.
+No unrelated generic explosion can be the main Ultimate concept.
+```
+
+For example, an arcade/controller character can use neon UI pulses, combo beats, and controller motifs. A beach/water character can use wave timing and tide motion. The effect numbers still come from `effectSpec`; animation only explains and dramatizes the already resolved battle result.
+
+Every taxonomy-applied skill must include:
+
+```js
+{
+  classification: {
+    taxonomyVersion: "skill-taxonomy-v1-original",
+    skillKind: "combo_drive",
+    skillKindLabel: "連段推進",
+    triggerFamilies: ["manual", "action_count"],
+    effectOps: ["damage", "gainUltimateCharge"]
+  },
+  presentation: {
+    tabKey: "active_ultimate",
+    triggerSummary: "手動發動 / 冷卻 1",
+    effectSummary: "造成傷害 / 累積大招能量"
+  },
+  animationProfile: {
+    animationKey: "afterimage_combo",
+    borderGlowKey: "rhythm",
+    motifTokens: ["controller", "retro arcade", "neon"],
+    triggerGlowClass: "card-border-skill-ready"
+  }
+}
+```
+
+### 6. VLM Skill Influence v1
 
 Confirmed answer:
 
@@ -380,7 +479,7 @@ Result:
   effectSpec comes from 攻擊型/連擊 pattern table
 ```
 
-### 6. Progression Feedback v1
+### 7. Progression Feedback v1
 
 Confirmed answer:
 

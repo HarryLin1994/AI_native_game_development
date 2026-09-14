@@ -1,3 +1,9 @@
+import {
+  applySkillTaxonomy,
+  buildSkillKitPresentationModel,
+  validateSkillTaxonomy
+} from "./skill-taxonomy.js";
+
 export const SKILL_MATERIAL_PROFILE_VERSION = "skill-material-v1";
 export const SKILL_KIT_VERSION = "skill-kit-v1";
 
@@ -217,29 +223,35 @@ export function generateSkillKit({
   const material = skillMaterialProfile ?? buildSkillMaterialProfile({ characterSpec, generationProfile });
   const combatIdentity = resolveCombatIdentity({ characterSpec, generationProfile, stats: cardStats });
   const nameMaterial = buildNameMaterial({ material, archetype, generationProfile });
+  const taxonomyContext = { material, combatIdentity };
   const activeSkills = [
     buildPrimaryActiveSkill({ combatIdentity, material, nameMaterial, cardStats, cardStatLine, generationProfile, rng }),
     buildSecondaryActiveSkill({ combatIdentity, material, nameMaterial, cardStats, cardStatLine, generationProfile, rng })
-  ];
+  ].map((skill) => applySkillTaxonomy(skill, taxonomyContext));
   const battleTraits = [
     buildIdentityBattleTrait({ combatIdentity, material, nameMaterial, generationProfile, traits, rng }),
     buildComebackBattleTrait({ combatIdentity, material, nameMaterial, generationProfile, rng })
-  ];
-  const ultimateSkill = buildUltimateSkill({
-    combatIdentity,
-    material,
-    nameMaterial,
-    generationProfile,
-    rng
-  });
+  ].map((skill) => applySkillTaxonomy(skill, taxonomyContext));
+  const ultimateSkill = applySkillTaxonomy(
+    buildUltimateSkill({
+      combatIdentity,
+      material,
+      nameMaterial,
+      generationProfile,
+      rng
+    }),
+    taxonomyContext
+  );
   const skillKit = {
     version: SKILL_KIT_VERSION,
     combatIdentity,
     materialProfileVersion: material.profileVersion,
     activeSkills,
     battleTraits,
-    ultimateSkill
+    ultimateSkill,
+    presentationModel: null
   };
+  skillKit.presentationModel = buildSkillKitPresentationModel(skillKit);
 
   return {
     ...skillKit,
@@ -790,6 +802,10 @@ function validateSkillEntry(errors, skill, path, minHooks) {
     if (!ALLOWED_EFFECT_OPS.includes(effect?.op)) {
       errors.push(`${path} contains unsupported effect op: ${String(effect?.op ?? "")}.`);
     }
+  }
+  const taxonomyValidation = validateSkillTaxonomy(skill);
+  if (!taxonomyValidation.ok) {
+    errors.push(...taxonomyValidation.errors.map((error) => `${path} ${error}`));
   }
 }
 

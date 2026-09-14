@@ -5,6 +5,12 @@ import {
   generateSkillKit,
   validateSkillKit
 } from "../src/card-generation/skill-kit.js";
+import {
+  SKILL_ANIMATION_RULES,
+  SKILL_CARD_TABS,
+  SKILL_KIND_RULES,
+  SKILL_TAXONOMY_VERSION
+} from "../src/card-generation/skill-taxonomy.js";
 
 function rng() {
   return 0.42;
@@ -106,6 +112,48 @@ assert.equal(skillKit.combatIdentity.combatVariant, "combo");
 assert.ok(skillKit.activeSkills.every((skill) => skill.identityHooks.length >= 2));
 assert.ok(skillKit.battleTraits.every((skill) => skill.effectSpec.length > 0));
 assert.ok(skillKit.ultimateSkill.condition.rules.length >= 2);
+assert.deepEqual(
+  skillKit.presentationModel.tabOrder.map((tab) => tab.key),
+  [
+    SKILL_CARD_TABS.ACTIVE_ULTIMATE,
+    SKILL_CARD_TABS.PASSIVE_CONDITIONS,
+    SKILL_CARD_TABS.ULTIMATE_ANIMATION
+  ]
+);
+assert.equal(skillKit.presentationModel.ultimateAnimationSlot, skillKit.ultimateSkill.animationProfile.animationKey);
+
+const allGeneratedSkills = [
+  ...skillKit.activeSkills,
+  ...skillKit.battleTraits,
+  skillKit.ultimateSkill
+];
+
+for (const skill of allGeneratedSkills) {
+  assert.equal(skill.classification.taxonomyVersion, SKILL_TAXONOMY_VERSION);
+  assert.ok(SKILL_KIND_RULES[skill.classification.skillKind]);
+  assert.ok(skill.presentation.tabKey);
+  assert.ok(skill.presentation.triggerSummary);
+  assert.ok(skill.presentation.effectSummary);
+  assert.equal(skill.animationProfile.version, SKILL_TAXONOMY_VERSION);
+  assert.ok(SKILL_ANIMATION_RULES[skill.animationProfile.animationKey]);
+  assert.ok(skill.animationProfile.borderGlowKey);
+  assert.ok(skill.animationProfile.triggerGlowClass);
+}
+
+assert.ok(skillKit.activeSkills.every((skill) => skill.presentation.tabKey === SKILL_CARD_TABS.ACTIVE_ULTIMATE));
+assert.ok(skillKit.battleTraits.every((skill) => skill.presentation.tabKey === SKILL_CARD_TABS.PASSIVE_CONDITIONS));
+assert.ok(skillKit.battleTraits.every((skill) => skill.presentation.triggerSummary.includes("觸發")));
+assert.ok(skillKit.ultimateSkill.presentation.detailTabKeys.includes(SKILL_CARD_TABS.ULTIMATE_ANIMATION));
+assert.equal(skillKit.ultimateSkill.classification.skillKind, "signature_ultimate");
+assert.equal(skillKit.ultimateSkill.animationProfile.animationKey, "signature_cinematic");
+assert.ok(skillKit.ultimateSkill.animationProfile.motifTokens.length > 0);
+assert.ok(skillKit.ultimateSkill.animationProfile.sourceHooks.length > 0);
+assert.ok(skillKit.ultimateSkill.animationProfile.ultimateSequence.length >= 4);
+
+const ultimateSequenceText = skillKit.ultimateSkill.animationProfile.ultimateSequence
+  .map((step) => `${step.label} ${step.direction}`)
+  .join(" ");
+assert.ok(skillKit.ultimateSkill.animationProfile.motifTokens.some((token) => ultimateSequenceText.includes(token)));
 
 const legacySkills = createLegacySkillsFromSkillKit(skillKit);
 

@@ -68,6 +68,7 @@ It asks the local VLM for roleplay candidates when available, then normalizes th
 - `Card Stat Line`: visible HP, ATK, DEF, COST, and level.
 - `Traits`: short game-facing tags.
 - `Skill Kit`: two Active Skills, two Battle Traits, and one Ultimate Skill derived from Character Spec. Details live in [SKILL_SYSTEM.md](./SKILL_SYSTEM.md).
+- `Skill Taxonomy`: original project skill kinds, card tab presentation metadata, trigger glow tokens, and animation profiles attached to each Skill Kit entry.
 - `Combat Core`: the confirmed v1 player-facing battle identity: `攻擊型`, `防禦型`, or `支援型`. Details live in [SKILL_SYSTEM.md](./SKILL_SYSTEM.md).
 - `Progression State`: saved growth data for a Battle Card, including max level 100, XP, skill ranks, blocking branch choices, Evolution Milestones, visual evolution tier, Evolution Art Jobs, generated evolved art, and battle record.
 - `Event Combat Profile`: deterministic event/season rule result that can modify stats, traits, archetype bias, skill words, lore, and card-art motifs.
@@ -86,13 +87,14 @@ The generated image cannot change these outputs after the fact.
 7. Create internal stats, then apply profile modifiers, including place, time, season, and public-holiday event modifiers.
 8. Derive the visible Card Stat Line from internal stats, rarity, skills, and level.
 9. Derive Traits and Skills from the same Character Spec inputs, including `Event Combat Profile`.
-10. Create initial `Progression State` for the playable Battle Card.
-11. Build the Prompt Profile for the selected Character Form Branch.
-12. Send Source Photo plus prompt to a Card Art Provider.
-13. Assemble the playable Battle Card.
-14. On later progression, create blocking Skill Branch choices with `buildSkillBranchOptions()` before creating an Evolution Art Job. The v1 option source rule is D: one `combatVariant` option and one photo/VLM/story `characterHook` option.
-15. Build an Evolution Prompt Profile and send it to a Card Art Provider.
-16. Save accepted evolved card art as a new art revision before marking Visual Evolution complete.
+10. Apply Skill Taxonomy rules to classify skill kinds, card tabs, trigger glow tokens, and animation profiles.
+11. Create initial `Progression State` for the playable Battle Card.
+12. Build the Prompt Profile for the selected Character Form Branch.
+13. Send Source Photo plus prompt to a Card Art Provider.
+14. Assemble the playable Battle Card.
+15. On later progression, create blocking Skill Branch choices with `buildSkillBranchOptions()` before creating an Evolution Art Job. The v1 option source rule is D: one `combatVariant` option and one photo/VLM/story `characterHook` option.
+16. Build an Evolution Prompt Profile and send it to a Card Art Provider.
+17. Save accepted evolved card art as a new art revision before marking Visual Evolution complete.
 
 ## Implemented Prompt Hook Stage
 
@@ -219,6 +221,9 @@ src/card-generation/character-spec.js
 
 src/card-generation/skill-kit.js
   -> done first pass for Skill Material Profile, 2 active skills, 2 battle traits, 1 ultimate skill, effectSpec validation, and legacy `skills` adapter
+
+src/card-generation/skill-taxonomy.js
+  -> done first pass for original skill kind rules, Skill Kit card tabs, trigger glow tokens, and animation profiles
 
 src/card-generation/prompt-profile.js
   -> optional later split if promptProfile grows too large
