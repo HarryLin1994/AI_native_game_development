@@ -51,6 +51,22 @@ Then open:
 http://127.0.0.1:5173
 ```
 
+## Godot Client Workspace
+
+The Godot client shell is under:
+
+```text
+godot/project.godot
+```
+
+Open it with:
+
+```bash
+godot --editor godot/project.godot
+```
+
+The local MCP setup for Godot and Blender is recorded in [docs/GODOT_BLENDER_MCP_SETUP.md](docs/GODOT_BLENDER_MCP_SETUP.md).
+
 ### Terminal
 
 ```bash

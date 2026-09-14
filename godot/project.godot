@@ -1,0 +1,21 @@
+; Engine configuration file.
+; Edit through Godot editor when possible.
+
+config_version=5
+
+[application]
+
+config/name="Help Me My Friend"
+run/main_scene="res://scenes/card_art_lab.tscn"
+config/features=PackedStringArray("4.7")
+
+[display]
+
+window/size/viewport_width=1080
+window/size/viewport_height=1920
+window/stretch/mode="canvas_items"
+window/stretch/aspect="expand"
+
+[editor_plugins]
+
+enabled=PackedStringArray("res://addons/godot_mcp/plugin.cfg")

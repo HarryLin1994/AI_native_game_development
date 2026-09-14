@@ -52,6 +52,10 @@ This folder holds the project memory for the AI-native card game MVP. Use this p
   - Current generated-character form branches and style targets, including humanlike, animalized cat/dog, objectified characters, American flat cartoon, neon arcade hero, designer-toy sticker, anatomy gates, and source-proportion locks.
   - Read this before changing character-art prompts, comparing visual styles, or deciding whether an output is aesthetically usable.
 
+- [GODOT_BLENDER_MCP_SETUP.md](./GODOT_BLENDER_MCP_SETUP.md)
+  - Local Godot and Blender MCP setup, installed tool versions, disk snapshot, startup steps, and local card-art workspace rules.
+  - Read this before opening Godot/Blender through MCP, changing local art tooling, or moving browser prototype work into the Godot client.
+
 - [comfyui-workflows/README.md](./comfyui-workflows/README.md)
   - Placeholder contract for exported ComfyUI API workflows.
   - Read this before saving or wiring a ComfyUI workflow JSON.
