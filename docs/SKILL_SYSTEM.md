@@ -1059,7 +1059,7 @@ src/progression/evolution-art.js
   -> buildEvolutionPromptProfile(), createEvolutionArtJob(), acceptEvolutionArtResult()
 
 src/battle/effect-interpreter.js
-  -> resolveEffectSpec(), validateEffectSpec(), trigger handling
+  -> first implementation of selectActiveSkill(), resolveEffectSpec(), validateEffectSpec(), active skill effect resolution, and legacy skill fallback
 ```
 
 The current `createSkills()` in `app.js` is a temporary legacy generator and should be replaced or wrapped by `generateSkillKit()` when implementation starts.
@@ -1070,6 +1070,8 @@ Current implementation note:
 generateSkillKit() is now wired during card generation.
 The existing `skills` array remains as a legacy adapter for the current two-button battle UI.
 The new `skillKit` data is saved on the Battle Card and Character Spec for branch choices, future effect interpretation, and UI expansion.
+The current battle buttons now resolve active skill `effectSpec` through `src/battle/effect-interpreter.js`.
+Battle Traits and Ultimate Skill are still generated as data, but their trigger/UI flow is a later step.
 ```
 
 ## Open Questions

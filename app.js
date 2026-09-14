@@ -43,6 +43,10 @@ import {
   validateProgressionState
 } from "./src/progression/progression-state.js";
 import { buildSkillBranchOptions } from "./src/progression/skill-branch-options.js";
+import {
+  resolveEffectSpec,
+  selectActiveSkill
+} from "./src/battle/effect-interpreter.js";
 
 const STORAGE_KEY = "photo-character-lab.characters.v1";
 const DEFAULT_SUBJECT_FOCUS = "center_primary_subject";
@@ -2747,7 +2751,7 @@ function playerAction(action) {
   }
 
   if (action.type === "skill") {
-    const skill = battle.player.skills[action.index];
+    const skill = selectActiveSkill(battle.player, action.index);
     applySkill(battle.player, battle.enemy, skill, battle);
   }
 
@@ -2771,9 +2775,9 @@ function enemyTurn() {
   const rng = mulberry32(hashString(`${battle.enemy.name}:${battle.turn}:${battle.player.hp}`));
   const lowHp = battle.enemy.hp / battle.enemy.maxHp < 0.35;
   if (lowHp && rng() > 0.35) {
-    applySkill(battle.enemy, battle.player, battle.enemy.skills[1], battle);
+    applySkill(battle.enemy, battle.player, selectActiveSkill(battle.enemy, 1), battle);
   } else if (rng() > 0.42) {
-    applySkill(battle.enemy, battle.player, battle.enemy.skills[0], battle);
+    applySkill(battle.enemy, battle.player, selectActiveSkill(battle.enemy, 0), battle);
   } else {
     applyAttack(battle.enemy, battle.player, battle, "普攻");
   }
@@ -2789,19 +2793,17 @@ function applyAttack(attacker, defender, battle, label) {
 }
 
 function applySkill(attacker, defender, skill, battle) {
-  if (skill.type === "guard") {
-    const shield = Math.round(skill.power + attacker.stats.guard * 0.24);
-    attacker.shield += shield;
-    pushLog(`${attacker.name} 發動 ${skill.name}，獲得 ${shield} 護盾`);
+  if (!skill) {
+    pushLog(`${attacker.name} 沒有可用技能`);
     return;
   }
 
   const rng = mulberry32(hashString(`${attacker.name}:${skill.name}:${battle.turn}:${defender.hp}`));
-  const crit = rng() < attacker.stats.luck / 260;
-  const base = skill.power + attacker.stats.focus * 0.18 + (crit ? attacker.stats.luck * 0.32 : 0);
-  const damage = mitigateDamage(base, defender, false);
-  defender.hp = clamp(defender.hp - damage, 0, defender.maxHp);
-  pushLog(`${attacker.name} 發動 ${skill.name}，造成 ${damage}${crit ? " 暴擊" : ""}傷害`);
+  const result = resolveEffectSpec({ battle, actor: attacker, opponent: defender, skill, rng });
+  for (const log of result.logs) {
+    pushLog(log);
+  }
+  battle.guarding = false;
 }
 
 function mitigateDamage(base, defender, guarding) {
@@ -2994,7 +2996,9 @@ function cloneFighter(card, side = "player") {
     side,
     hp: maxHp,
     maxHp,
-    shield: 0
+    shield: 0,
+    ultimateCharge: 0,
+    temporaryStatMods: []
   };
 }
 
