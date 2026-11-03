@@ -1167,7 +1167,8 @@ async function createCard(analysis, sourceImageDataUrl, reroll, generationProfil
   const characterSpecContexts = buildCharacterSpecContexts({
     analysis,
     generationProfile,
-    captureMoment: createRuntimeCaptureMoment()
+    captureMoment: createRuntimeCaptureMoment(),
+    cardStats: stats
   });
   const skillMaterialProfile = buildSkillMaterialProfile({
     characterSpec: {
@@ -1538,9 +1539,17 @@ function deriveCardStatLineFromParts({ stats, hpBase, level, rarity, skills }) {
     hp: Math.round((hpBase + safeLevel * 8) * 34 + guard * 18 + focus * 9 + rarityBonus * 40),
     atk: Math.round(power * 76 + speed * 28 + focus * 18 + luck * 10 + rarityBonus * 78 + safeLevel * 38),
     def: Math.round(guard * 72 + focus * 26 + power * 8 + rarityBonus * 64 + safeLevel * 34),
+    agi: Math.round(speed + rarityBonus + Math.floor((safeLevel - 1) / 8)),
     cost: clamp(Math.round(4 + rarityCost + total / 68 + skills.length * 2 + safeLevel / 12), 4, 99),
     level: safeLevel
   };
+}
+
+function getCardStatLine(card) {
+  if (!card?.cardStatLine || card.cardStatLine.agi === undefined) {
+    return deriveCardStatLine(card);
+  }
+  return card.cardStatLine;
 }
 
 function getRarityBonus(rarity) {
@@ -1554,6 +1563,7 @@ function getRarityCost(rarity) {
     N: 0,
     R: 6,
     SR: 12,
+    SSR: 16,
     UR: 20
   }[key] ?? 0;
 }
@@ -2566,7 +2576,7 @@ function renderAnalysis(analysis) {
 }
 
 function renderCard(card) {
-  const statLine = card.cardStatLine ?? deriveCardStatLine(card);
+  const statLine = getCardStatLine(card);
   const portraitUrl = card.aiPortraitDataUrl ?? card.imageDataUrl;
   const pendingChoice = getRequiredBranchChoice(card);
   card.cardStatLine = statLine;
@@ -2608,6 +2618,10 @@ function renderCard(card) {
       <div>
         <strong>${statLine.def}</strong>
         <span>${cardStatLabels.def}</span>
+      </div>
+      <div>
+        <strong>${statLine.agi}</strong>
+        <span>${cardStatLabels.agi}</span>
       </div>
     </div>
     <div class="card-body">
@@ -2671,7 +2685,7 @@ function renderDeck() {
   els.deckList.innerHTML = state.deck
     .map(
       (card) => {
-        const statLine = card.cardStatLine ?? deriveCardStatLine(card);
+        const statLine = getCardStatLine(card);
         const pendingChoice = getRequiredBranchChoice(card);
         return `
           <div class="deck-card ${card.id === state.selectedCardId ? "selected" : ""} ${pendingChoice ? "pending-branch" : ""}" style="--accent:${card.accent}">
@@ -2684,6 +2698,7 @@ function renderDeck() {
                 <b>HP ${statLine.hp}</b>
                 <b>ATK ${statLine.atk}</b>
                 <b>DEF ${statLine.def}</b>
+                <b>AGI ${statLine.agi}</b>
               </span>
             </button>
             <button class="delete-button" type="button" data-delete="${card.id}" aria-label="刪除 ${escapeHtml(card.name)}">刪除</button>

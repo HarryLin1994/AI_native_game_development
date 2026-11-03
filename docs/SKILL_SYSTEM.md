@@ -395,7 +395,7 @@ Forbidden VLM influence:
 | `target` | VLM cannot choose arbitrary target rules. |
 | `cooldown` / `chargeCost` | VLM cannot set costs. |
 | `ultimateCondition` | VLM cannot directly write conditions. It can supply material that maps to rule-table conditions. |
-| rarity, HP, ATK, DEF, COST | VLM cannot assign card power. |
+| rarity, HP, ATK, DEF, AGI, COST | VLM cannot assign card power. |
 
 Implementation target:
 
@@ -498,6 +498,25 @@ Level Cap = 100
 Evolution Milestones = Lv.16 / Lv.36 / Lv.70 / Lv.100
 ```
 
+Rarity growth direction:
+
+```text
+Rarity bonus should raise growth ceiling: original skill growth ceiling, evolved skill growth
+ceiling, and level cap can be higher for rarer cards.
+```
+
+Confirmed visual rarity frame mapping:
+
+```text
+N = bronze / copper frame
+R = silver frame
+SR = gold frame
+SSR = purple frame
+UR = current cyan / magenta / gold explosive battle-card frame
+```
+
+The exact rarity-to-level-cap table and rarity-to-skill-rank-cap table are not confirmed yet.
+
 Milestone table:
 
 | Level | Milestone | Branch focus | Visual tier |
@@ -513,7 +532,7 @@ Player-facing feedback:
 
 | Feedback type | What the player sees | Rule source |
 |---|---|---|
-| Stats growth | HP/ATK/DEF/COST/Level update | level curve + rarity + Combat Core |
+| Stats growth | HP/ATK/DEF/AGI/COST/Level update | level curve + rarity + Combat Core |
 | Skill strengthening | skill effect numbers improve | Skill Rank rule table |
 | Skill branch evolution | skill chooses an upgrade route | Skill Branch rule table |
 | Visual evolution | newly generated evolved card art, plus frame/aura/badge changes | Visual Evolution profile + Card Art Provider |
@@ -873,7 +892,7 @@ Validation:
 - Derived stats must be recalculated from base data, not hand-edited and saved as truth.
 - Skill Rank cannot create unsupported `effectSpec` operations.
 - Skill Branch must keep original identity hooks or add compatible hooks.
-- Visual Evolution cannot change HP/ATK/DEF by itself.
+- Visual Evolution cannot change HP/ATK/DEF/AGI by itself.
 - Visual Evolution must create and track an Evolution Art Job when an evolution tier changes.
 - Evolved card art must pass the same art acceptance gates as the normal card-art pipeline, plus branch readability.
 - Local UI overlays do not count as completed Visual Evolution without accepted generated art.

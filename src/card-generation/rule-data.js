@@ -57,6 +57,7 @@ export const rarityTable = [
   { key: "N", name: "Normal", threshold: 0, bonus: 0 },
   { key: "R", name: "Rare", threshold: 55, bonus: 8 },
   { key: "SR", name: "Super Rare", threshold: 72, bonus: 15 },
+  { key: "SSR", name: "Super Super Rare", threshold: 80, bonus: 20 },
   { key: "UR", name: "Ultra Rare", threshold: 86, bonus: 24 }
 ];
 
@@ -72,6 +73,7 @@ export const cardStatLabels = {
   hp: "HP",
   atk: "ATK",
   def: "DEF",
+  agi: "AGI",
   cost: "COST"
 };
 

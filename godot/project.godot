@@ -14,12 +14,6 @@ config/name="Help Me My Friend"
 run/main_scene="res://scenes/card_art_lab.tscn"
 config/features=PackedStringArray("4.6")
 
-[autoload]
-
-MCPRuntimeBridge="*res://addons/godot_mcp/services/mcp_runtime_bridge.gd"
-MCPInputBridge="*res://addons/godot_mcp/services/mcp_input_bridge.gd"
-MCPScreenshotBridge="*res://addons/godot_mcp/services/mcp_screenshot_bridge.gd"
-
 [display]
 
 window/size/viewport_width=1080

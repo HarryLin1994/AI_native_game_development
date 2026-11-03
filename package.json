@@ -5,11 +5,13 @@
   "type": "module",
   "scripts": {
     "dev": "node server.mjs",
+    "card-art:smoke": "node tools/card-art-provider-smoke.mjs",
     "comfy:start": "cd .local-tools/ComfyUI && ../comfy-venv/bin/python main.py --listen 127.0.0.1 --port 8188 --fp32-vae",
     "comfy:generate-smoke": "node tools/comfy-card-art-smoke.mjs",
     "battle:smoke": "node tools/effect-interpreter-smoke.mjs",
     "progression:smoke": "node tools/progression-smoke.mjs",
     "skill:smoke": "node tools/skill-kit-smoke.mjs",
+    "pose:smoke": "node tools/pose-reference-smoke.mjs",
     "comfy:style-compare": "node tools/comfy-style-comparison.mjs",
     "comfy:status": "node tools/comfy-status.mjs"
   }

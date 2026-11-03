@@ -107,6 +107,9 @@ const promptProfile = buildEvolutionPromptProfile({
 
 assert.equal(promptProfile.artRevision, 1);
 assert.match(formatEvolutionPromptForImageModel(promptProfile), /EVOLUTION TIER/u);
+assert.match(formatEvolutionPromptForImageModel(promptProfile), /POSE REFERENCE/u);
+assert.equal(promptProfile.selectedPoseReference.imageInputPolicy, "do_not_send_original_pose_image_to_image_model");
+assert.equal(promptProfile.selectedPoseReference.poseIntent.sourcePolicy.noGenderInferenceFromPhoto, true);
 assert.match(promptProfile.branchHooks.join(" "), /arcade/u);
 
 const providerRequest = createEvolutionArtProviderRequest({

@@ -235,6 +235,7 @@ First visible stats:
 - `HP`: how much damage the character can take.
 - `ATK`: how hard the character hits.
 - `DEF`: how much damage the character resists.
+- `AGI`: how quickly the character acts; used later to decide combat order.
 - `COST`: how expensive or powerful the card is for future team-building rules.
 - `Level`: current growth stage.
 
@@ -246,7 +247,7 @@ Internal stats can remain richer:
 - `focus`
 - `luck`
 
-比喻：`HP / ATK / DEF / COST` 是卡面上玩家一眼看到的儀表板；`power / speed / guard / focus / luck` 是引擎裡的零件，負責讓技能和戰鬥有更多變化。
+比喻：`HP / ATK / DEF / AGI / COST` 是卡面上玩家一眼看到的儀表板；`power / speed / guard / focus / luck` 是引擎裡的零件，負責讓技能和戰鬥有更多變化。
 
 First derivation rule:
 
@@ -262,6 +263,7 @@ Draft visible stat mapping:
 - `HP` comes mostly from `guard`, `focus`, level, and defensive values.
 - `ATK` comes mostly from `power`, `speed`, focus, and offensive values.
 - `DEF` comes mostly from `guard`, focus, and defensive traits.
+- `AGI` comes from internal `speed` plus rarity bonus and level bonus; it is used for future combat order. V1 formula: `AGI = speed + rarity.bonus + floor((level - 1) / 8)`.
 - `COST` comes from rarity, total stat budget, level cap, and skill complexity.
 - `Level` starts at 1 and changes through progression.
 

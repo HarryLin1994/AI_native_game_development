@@ -14,7 +14,7 @@ Use this document before splitting code modules, adding AI adapters, changing st
 2. AI models observe, suggest, or render. Rules decide mechanics.
    - OCR / Vision can suggest `Photo Signal` and non-sensitive `Model-Suggested Fields`.
    - Picture generation can produce card art.
-   - `Rule / Algorithm layer` decides `HP`, `ATK`, `DEF`, `COST`, traits, skills, rarity, and progression hooks.
+   - `Rule / Algorithm layer` decides `HP`, `ATK`, `DEF`, `AGI`, `COST`, traits, skills, rarity, and progression hooks.
 
 3. Consent comes before model use and storage.
    - Source Photo, User-Supplied Context, Sensitive Creative Context, and Capture Context should each have clear consent behavior.
@@ -577,7 +577,7 @@ Prompt rules:
 - Source Photo guides broad likeness and visual cues.
 - User-selected VLM candidates and VLM-auto fields guide costume, props, aura, background, and mood.
 - Generated image output cannot modify stats or skills.
-- Do not put final `HP / ATK / DEF / COST` text inside the generated image; render it in UI for legibility and localization.
+- Do not put final `HP / ATK / DEF / AGI / COST` text inside the generated image; render it in UI for legibility and localization.
 
 ### Model Source Notes
 
@@ -702,7 +702,7 @@ Rule / Algorithm layer:
 1. Confirm this pipeline document.
 2. Add the first questionnaire fields from `CHARACTER_QUESTIONS.md`. Prototyped, then moved out of the main generator UI in favor of a card-first screen.
 3. Make the current app produce and show the fuller `Character Spec`. First context pass done: `src/card-generation/character-spec.js` now normalizes Capture / Questionnaire / Vision / Event Context and builds image prompt hooks.
-4. Add visible `HP / ATK / DEF / COST / Level` to the generated card and saved card list. First pass done.
+4. Add visible `HP / ATK / DEF / AGI / COST / Level` to the generated card and saved card list. First pass done.
 5. Add explainable rule output: why the card got its element, stats, traits, and skills.
 6. Correct save behavior so raw Source Photo is not required for saved Battle Cards.
 7. Extract `buildCharacterSpec` from `app.js` into its own module. First pass done for context normalization and prompt hooks; rules for archetype, rarity, stats, traits, and skills still need extraction.
@@ -722,7 +722,7 @@ Rule / Algorithm layer:
 | Questionnaire | Hidden defaults in generator screen; still user-declared by policy | Add separate setup/review UX and model-suggested editable chips later |
 | Character Spec | First context module exists in `src/card-generation/character-spec.js`; `app.js` now stores `contexts`, `promptProfile`, `sourceRefs`, and acquisition methods on each spec | Extract remaining archetype, rarity, stats, traits, and skills from `app.js` |
 | Rule / Algorithm layer | Exists inside character generation functions | Separate from UI and image generation |
-| Card Stat Line | First visible HP/ATK/DEF/COST/Level exists | Tune formulas and connect more directly to battle balance |
+| Card Stat Line | First visible HP/ATK/DEF/AGI/COST/Level exists | Tune formulas and connect more directly to battle balance |
 | Card Cover | Canvas exists, unified `/api/card-art` provider adapter exists for Gemini/OpenAI/Comfy, `/api/card-art-compare` exists for explicit A/B runs, ComfyUI status smoke test exists, SDXL Turbo img2img smoke workflow generated a valid PNG, and IP-Adapter FaceID workflow generated valid PNGs with better likeness but too-photographic style | Compare Gemini and OpenAI outputs against the same prompt and image acceptance gates |
 | Save System | localStorage exists | Stop requiring raw Source Photo by default |
 | Progression | XP/level/win/loss exists | Connect growth rules to Character Spec |
@@ -733,7 +733,7 @@ Rule / Algorithm layer:
 - Which local OCR adapter should be used first.
 - Whether Capture Context starts as manual-only or uses device APIs later.
 - Whether users can edit the generated Character Spec before card art generation.
-- Exact stat formulas for `HP / ATK / DEF / COST`.
+- Exact stat formulas for `HP / ATK / DEF / AGI / COST`.
 - Exact skill schema and effect-resolution order.
 - Whether progression lives inside `Battle Card` or a separate progression record later.
 - Whether raw Source Photo can ever be stored, and what opt-in text is required.

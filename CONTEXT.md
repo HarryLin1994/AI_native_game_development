@@ -189,7 +189,7 @@ A numeric battle attribute on a character, such as power, speed, guard, focus, o
 _Avoid_: Metric, score
 
 **Card Stat Line**:
-The visible combat numbers printed on a Battle Card, such as HP, ATK, DEF, COST, level, and later any game-specific battle values. It is derived from Character Spec and progression through project rules, not freely assigned by an AI model.
+The visible combat numbers printed on a Battle Card, such as HP, ATK, DEF, AGI, COST, and level. It is derived from Character Spec and progression through project rules, not freely assigned by an AI model. In v1, AGI is derived from internal speed plus rarity and level bonuses.
 _Avoid_: AI score, person rating, visual quality score
 
 **Trait**:

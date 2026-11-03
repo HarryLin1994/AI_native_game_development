@@ -20,6 +20,7 @@ Source Photo
   -> Card Generation Mechanism
   -> Character Spec
   -> Card Stat Line
+  -> Pose Reference Selection
   -> Prompt Profile
   -> Card Art Provider
   -> Battle Card
@@ -65,7 +66,7 @@ It asks the local VLM for roleplay candidates when available, then normalizes th
 - `Archetype`: fantasy role, element, accent color, and stat bias.
 - `Rarity`: game tier and stat budget modifier.
 - `Stats`: internal stats such as power, speed, guard, focus, and luck.
-- `Card Stat Line`: visible HP, ATK, DEF, COST, and level.
+- `Card Stat Line`: visible HP, ATK, DEF, AGI, COST, and level.
 - `Traits`: short game-facing tags.
 - `Skill Kit`: two Active Skills, two Battle Traits, and one Ultimate Skill derived from Character Spec. Details live in [SKILL_SYSTEM.md](./SKILL_SYSTEM.md).
 - `Skill Taxonomy`: original project skill kinds, card tab presentation metadata, trigger glow tokens, and animation profiles attached to each Skill Kit entry.
@@ -73,6 +74,10 @@ It asks the local VLM for roleplay candidates when available, then normalizes th
 - `Progression State`: saved growth data for a Battle Card, including max level 100, XP, skill ranks, blocking branch choices, Evolution Milestones, visual evolution tier, Evolution Art Jobs, generated evolved art, and battle record.
 - `Event Combat Profile`: deterministic event/season rule result that can modify stats, traits, archetype bias, skill words, lore, and card-art motifs.
 - `Prompt Profile`: controlled card-art prompt hooks for the image provider.
+- `Selected Pose Reference`: local pose-catalog choice derived from source-photo analysis,
+  visible pose cues, character settings, occupation group, and progression tier before prompt
+  generation. Details live in
+  [POSE_REFERENCE_SELECTION.md](./POSE_REFERENCE_SELECTION.md).
 
 The generated image cannot change these outputs after the fact.
 
@@ -85,16 +90,23 @@ The generated image cannot change these outputs after the fact.
 5. Choose `Archetype` from Photo Analysis plus explicit profile bias.
 6. Choose `Rarity` from visual signal strength plus seeded variation.
 7. Create internal stats, then apply profile modifiers, including place, time, season, and public-holiday event modifiers.
-8. Derive the visible Card Stat Line from internal stats, rarity, skills, and level.
+8. Derive the visible Card Stat Line from internal stats, rarity, skills, and level. In v1, visible `AGI` is based on internal `speed` plus rarity and level bonuses, not a separate AI-written stat: `AGI = speed + rarity.bonus + floor((level - 1) / 8)`.
 9. Derive Traits and Skills from the same Character Spec inputs, including `Event Combat Profile`.
 10. Apply Skill Taxonomy rules to classify skill kinds, card tabs, trigger glow tokens, and animation profiles.
 11. Create initial `Progression State` for the playable Battle Card.
-12. Build the Prompt Profile for the selected Character Form Branch.
-13. Send Source Photo plus prompt to a Card Art Provider.
-14. Assemble the playable Battle Card.
-15. On later progression, create blocking Skill Branch choices with `buildSkillBranchOptions()` before creating an Evolution Art Job. The v1 option source rule is D: one `combatVariant` option and one photo/VLM/story `characterHook` option.
-16. Build an Evolution Prompt Profile and send it to a Card Art Provider.
-17. Save accepted evolved card art as a new art revision before marking Visual Evolution complete.
+12. Select a local Pose Reference from source-photo pose/activity cues and the project pose
+    catalog. VLM/AI may help describe visible pose cues, but the deterministic rule layer chooses
+    the final pose. Body profile comes from character settings or form branch, never from
+    source-photo gender inference. Gemini or another provider should receive a chosen pose cue, not
+    freely choose from the whole library.
+13. Build the Prompt Profile for the selected Character Form Branch, including the selected pose
+    prompt cue when available.
+14. Send Source Photo plus prompt to a Card Art Provider.
+15. Assemble the playable Battle Card.
+16. On later progression, create blocking Skill Branch choices with `buildSkillBranchOptions()` before creating an Evolution Art Job. The v1 option source rule is D: one `combatVariant` option and one photo/VLM/story `characterHook` option.
+17. Build an Evolution Prompt Profile, rerun Pose Reference Selection with the target evolution
+    tier, and send the upgraded prompt to a Card Art Provider.
+18. Save accepted evolved card art as a new art revision before marking Visual Evolution complete.
 
 ## Implemented Prompt Hook Stage
 
@@ -211,6 +223,19 @@ src/card-generation/rule-data.js
 ```
 
 This module contains Rule Tables only: archetypes, rarity, labels, profile modifiers, event/season combat profiles, weakness rules, and occupation rules.
+
+Pose reference selection module:
+
+```text
+src/card-generation/pose-reference.js
+```
+
+This module implements option A from [POSE_REFERENCE_SELECTION.md](./POSE_REFERENCE_SELECTION.md):
+deterministic catalog scoring with AI-assisted visible cue input. It builds `poseIntent`, selects
+`promptProfile.selectedPoseReference`, and formats a provider-safe `POSE REFERENCE` prompt block.
+The current catalog has 260 text-only pose candidates across body profiles, occupation groups, and
+evolution stages. Downloaded RazielNozac pose PNGs are source references only and must not be sent
+to image providers until neutralized into mannequin/skeleton guides.
 
 Next modules should be split in this order:
 

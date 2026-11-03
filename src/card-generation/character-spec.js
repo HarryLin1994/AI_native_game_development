@@ -1,3 +1,8 @@
+import {
+  formatSelectedPoseReferenceForImageModel,
+  selectPoseReference
+} from "./pose-reference.js";
+
 export const CONTEXT_ACQUISITION_METHODS = Object.freeze({
   preciseGps: Object.freeze({
     primary: "browser_geolocation",
@@ -114,17 +119,33 @@ const DEFAULT_PROMPT_AVOID_RULES = Object.freeze([
   "no card frame, no UI, no stat panel, no readable text"
 ]);
 
-export function buildCharacterSpecContexts({ analysis = null, generationProfile = {}, captureMoment = null } = {}) {
+export function buildCharacterSpecContexts({ analysis = null, generationProfile = {}, captureMoment = null, cardStats = {} } = {}) {
   const capture = normalizeCaptureContext(generationProfile.captureContext, generationProfile, captureMoment);
   const questionnaire = normalizeQuestionnaireContext(generationProfile);
-  const vision = normalizeVisionContext(analysis);
+  let vision = normalizeVisionContext(analysis);
   const event = normalizeEventContext(generationProfile.eventContext, capture);
+  const selectedPoseReference = selectPoseReference({
+    analysis,
+    generationProfile,
+    cardStats,
+    contexts: {
+      capture,
+      questionnaire,
+      vision,
+      event
+    }
+  });
+  vision = {
+    ...vision,
+    poseIntent: selectedPoseReference.poseIntent
+  };
   const promptProfile = buildPromptProfile({
     capture,
     questionnaire,
     vision,
     event,
-    characterFormBranch: generationProfile.characterFormBranch
+    characterFormBranch: generationProfile.characterFormBranch,
+    selectedPoseReference
   });
 
   return {
@@ -372,7 +393,7 @@ export function normalizeEventContext(input = {}, captureContext = {}) {
   };
 }
 
-export function buildPromptProfile({ capture, questionnaire, vision, event, characterFormBranch = "humanlike" }) {
+export function buildPromptProfile({ capture, questionnaire, vision, event, characterFormBranch = "humanlike", selectedPoseReference = null }) {
   const branchHooks =
     characterFormBranch === "animalized.cat"
       ? [
@@ -417,6 +438,7 @@ export function buildPromptProfile({ capture, questionnaire, vision, event, char
     eventHooks,
     storyHooks,
     worldHooks,
+    selectedPoseReference,
     avoidRules: [...DEFAULT_PROMPT_AVOID_RULES],
     protectedRawInputs: ["exact coordinates", "formatted address", "raw Google Maps URL", "Google Place ID", "unapproved sensitive context"],
     sourcePolicies: {
@@ -438,6 +460,7 @@ export function formatPromptHooksForImageModel(promptProfile) {
     formatHookLine("EVENT / SEASON HOOKS", promptProfile.eventHooks),
     formatHookLine("SOURCE PHOTO WORLD HOOKS", promptProfile.worldHooks),
     formatHookLine("STORY HOOKS", promptProfile.storyHooks),
+    formatSelectedPoseReferenceForImageModel(promptProfile.selectedPoseReference),
     formatHookLine("AVOID / PRIVACY RULES", promptProfile.avoidRules)
   ]
     .filter(Boolean)

@@ -121,6 +121,8 @@ Allowed fields:
 
 - `targetSubject`: one centered or selected Target Subject.
 - `personAppearance`: hair shape, expression cue, pose, accessory, outfit silhouette, face visibility.
+- `poseIntent`: source-photo-derived pose/action intent used to choose a local pose reference for
+  image prompting. It is visual guidance only, not a stat.
 - `worldContext`: scene, activity, object, lighting, composition, visual signal.
 - `textSeed`: visible text or manually entered text.
 - `palette`: dominant colors.
@@ -263,6 +265,7 @@ Event Context affects character generation through deterministic rule tables, no
       "hp": 4965,
       "atk": 3968,
       "def": 2350,
+      "agi": 98,
       "cost": 8,
       "level": 1
     },
@@ -284,6 +287,13 @@ Event Context affects character generation through deterministic rule tables, no
     "locationHooks": ["neon indoor venue"],
     "eventHooks": [],
     "storyHooks": ["local arcade challenge"],
+    "selectedPoseReference": {
+      "poseId": "neutral_human_athlete_quick_feint",
+      "bodyProfile": "neutral_human",
+      "occupationGroup": "athlete",
+      "poseStage": "base",
+      "imageInputPolicy": "do_not_send_original_pose_image_to_image_model"
+    },
     "avoidRules": ["no text", "no UI", "no card frame"]
   }
 }
@@ -308,6 +318,12 @@ Event Context affects character generation through deterministic rule tables, no
 ## Prompt Policy
 
 Everything in `promptProfile` may be passed to Card Art Providers.
+
+`promptProfile.selectedPoseReference` may be passed to Card Art Providers only after it is chosen
+by the project rule layer from the local pose catalog. See
+[POSE_REFERENCE_SELECTION.md](./POSE_REFERENCE_SELECTION.md). The provider should treat it as a
+pose/action reference, not a style reference. Body profile is chosen from character settings or
+form branch only, never from source-photo gender inference.
 
 Raw private fields should not be passed by default:
 

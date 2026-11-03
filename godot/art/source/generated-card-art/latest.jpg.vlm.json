@@ -1,0 +1,65 @@
+{
+  "ok": true,
+  "provider": "ollama",
+  "model": "gemma3:4b",
+  "subjectFocus": "_object_object_",
+  "subjectImageMode": "full_image_only",
+  "latencyMs": 15352,
+  "tags": [
+    "person",
+    "short hair",
+    "open-mouth expression",
+    "standing pose",
+    "sunglasses",
+    "silver necklace",
+    "outdoor",
+    "park",
+    "pathway",
+    "necklace",
+    "wooden fence",
+    "rocks",
+    "gray long-sleeved shirt",
+    "bright daylight",
+    "sunlight",
+    "low-angle shot",
+    "close-up",
+    "shadow"
+  ],
+  "groups": {
+    "personAppearance": [
+      "person",
+      "short hair",
+      "open-mouth expression",
+      "standing pose",
+      "sunglasses",
+      "silver necklace"
+    ],
+    "scene": [
+      "outdoor",
+      "park",
+      "pathway"
+    ],
+    "object": [
+      "necklace",
+      "wooden fence",
+      "rocks"
+    ],
+    "clothing": [
+      "gray long-sleeved shirt"
+    ],
+    "lighting": [
+      "bright daylight",
+      "sunlight"
+    ],
+    "composition": [
+      "low-angle shot",
+      "close-up"
+    ],
+    "visualSignal": [
+      "shadow"
+    ]
+  },
+  "raw": {
+    "content": "{\"personAppearance\":[\"person\", \"short hair\", \"open-mouth expression\", \"standing pose\", \"sunglasses\", \"silver necklace\", \"visible face\"], \"scene\":[\"outdoor\", \"park\", \"pathway\"], \"activity\":[],\"object\":[\"sunglasses\", \"necklace\", \"wooden fence\", \"rocks\"], \"state\":[],\"clothing\":[\"gray long-sleeved shirt\"], \"lighting\":[\"bright daylight\", \"sunlight\"], \"composition\":[\"low-angle shot\", \"close-up\"], \"visualSignal\":[\"shadow\"]}"
+  }
+}

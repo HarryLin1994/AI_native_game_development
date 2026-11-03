@@ -1,6 +1,6 @@
-[gd_scene format=3]
+[gd_scene format=3 uid="uid://dumrn86cetuua"]
 
-[node name="CardArtLab" type="Control"]
+[node name="CardArtLab" type="Control" unique_id=1788415039]
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
@@ -8,7 +8,7 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 
-[node name="Background" type="ColorRect" parent="."]
+[node name="Background" type="ColorRect" parent="." unique_id=881924065]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -18,7 +18,7 @@ grow_vertical = 2
 mouse_filter = 2
 color = Color(0.025, 0.029, 0.037, 1)
 
-[node name="RootMargin" type="MarginContainer" parent="."]
+[node name="RootMargin" type="MarginContainer" parent="." unique_id=866586303]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -34,28 +34,28 @@ theme_override_constants/margin_top = 0
 theme_override_constants/margin_right = 0
 theme_override_constants/margin_bottom = 0
 
-[node name="Content" type="VBoxContainer" parent="RootMargin"]
+[node name="Content" type="VBoxContainer" parent="RootMargin" unique_id=1477804084]
 layout_mode = 2
 theme_override_constants/separation = 24
 alignment = 1
 
-[node name="Title" type="Label" parent="RootMargin/Content"]
+[node name="Title" type="Label" parent="RootMargin/Content" unique_id=2055270194]
 layout_mode = 2
 theme_override_font_sizes/font_size = 42
 text = "Help Me My Friend - Card Art Lab"
 horizontal_alignment = 1
 
-[node name="CardStage" type="PanelContainer" parent="RootMargin/Content"]
+[node name="CardStage" type="PanelContainer" parent="RootMargin/Content" unique_id=1185477926]
 custom_minimum_size = Vector2(640, 940)
 layout_mode = 2
 size_flags_horizontal = 4
 
-[node name="CardFramePlaceholder" type="ColorRect" parent="RootMargin/Content/CardStage"]
+[node name="CardFramePlaceholder" type="ColorRect" parent="RootMargin/Content/CardStage" unique_id=1175147144]
 layout_mode = 2
 mouse_filter = 2
 color = Color(0.122, 0.129, 0.153, 1)
 
-[node name="Caption" type="Label" parent="RootMargin/Content"]
+[node name="Caption" type="Label" parent="RootMargin/Content" unique_id=1818465845]
 layout_mode = 2
 theme_override_font_sizes/font_size = 24
 text = "MCP-ready Godot project shell. Card frame assets will replace the placeholder."

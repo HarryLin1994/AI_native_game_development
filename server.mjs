@@ -1257,7 +1257,7 @@ function buildProviderCardArtPrompt(prompt, negativePrompt) {
     "Use the attached source photo as the consenting subject and visual reference.",
     "Preserve recognizable likeness or transferred visible cues according to the prompt branch.",
     "Follow the project prompt below exactly. Do not add UI, card frame, readable text, labels, logos, watermarks, or stat panels.",
-    "The game app will render HP, ATK, DEF, COST, card frame, and text separately after this image returns.",
+    "The game app will render HP, ATK, DEF, AGI, COST, card frame, and text separately after this image returns.",
     "Project prompt:",
     prompt,
     negativePrompt ? `Avoid these failures: ${negativePrompt}` : ""

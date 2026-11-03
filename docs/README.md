@@ -52,6 +52,14 @@ This folder holds the project memory for the AI-native card game MVP. Use this p
   - Current generated-character form branches and style targets, including humanlike, animalized cat/dog, objectified characters, American flat cartoon, neon arcade hero, designer-toy sticker, anatomy gates, and source-proportion locks.
   - Read this before changing character-art prompts, comparing visual styles, or deciding whether an output is aesthetically usable.
 
+- [POSE_REFERENCE_SELECTION.md](./POSE_REFERENCE_SELECTION.md)
+  - Rules for using a local pose-reference pack in the card-art prompt pipeline.
+  - Read this before adding pose reference assets, selecting poses from source-photo analysis, or changing Gemini/OpenAI prompt pose instructions.
+
+- [CARD_FACE_TEMPLATE_ADAPTATION.md](./CARD_FACE_TEMPLATE_ADAPTATION.md)
+  - Selected LadyLuck Persona-style card template source and required project-specific modifications, including native HP/ATK/DEF/AGI value bars.
+  - Read this before building the Godot/Blender card-face milestone or changing card-frame source assets.
+
 - [GODOT_BLENDER_MCP_SETUP.md](./GODOT_BLENDER_MCP_SETUP.md)
   - Local Godot and Blender MCP setup, installed tool versions, disk snapshot, startup steps, and local card-art workspace rules.
   - Read this before opening Godot/Blender through MCP, changing local art tooling, or moving browser prototype work into the Godot client.

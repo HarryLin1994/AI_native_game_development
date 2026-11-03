@@ -85,7 +85,7 @@ AI 不能直接決定遊戲規則。模型可以讀字、觀察非敏感照片�
 這個遊戲最大的賣點是：玩家拍下來的照片與 User 資訊會生成一張獨特 Battle Card，而不是只生成一張好看的圖。每張 Battle Card 都要包含：
 
 - AI 生成或本機 fallback 的卡牌封面。
-- Card Stat Line，例如 HP、ATK、DEF、COST、Level。
+- Card Stat Line，例如 HP、ATK、DEF、AGI、COST、Level。
 - 由照片細節與 User 資訊轉換出的 Traits。
 - 由規則層產生的 Skills。
 - 可被養成系統改變的成長狀態，例如 XP、Level、勝敗紀錄。
@@ -171,7 +171,13 @@ Source Photo
 
 目前 UI 方向參考手機抽卡 RPG 的高資訊密度角色卡，以及 Hearthstone 的卡牌移動手感。
 
-- 角色庫需要清楚顯示角色圖、稀有度、屬性、等級、HP、ATK、DEF、COST。
+Battle Card v1 卡面基準已改用使用者在 2026-09-14 提供的兩張 `1024x1536` Dokkan-like
+爆裂戰鬥卡模板，檔案位於 `godot/art/reference/ui/battle-card-dokkan-style-filled-reference.png`
+與 `godot/art/reference/ui/battle-card-dokkan-style-blank-template.png`。這兩張是目前卡片資訊
+階層與視覺密度的主參考；舊 Persona-style template 只保留為次要參考。
+外框顏色由稀有度決定：`N` 銅、`R` 銀、`SR` 金、`SSR` 紫、`UR` 使用目前藍紫金霓虹爆裂模板色。
+
+- 角色庫需要清楚顯示角色圖、稀有度、屬性、等級、HP、ATK、DEF、AGI、COST。
 - 角色詳情頁需要以大角色圖為主，搭配醒目的數值、技能、等級條、養成按鈕。
 - 戰鬥時卡牌應該像實體卡片一樣移動、放大、彈回、發光，而不是只是普通網頁按鈕。
 
@@ -203,5 +209,6 @@ Source Photo
 
 - 每次實作只做一小步。
 - 不臆測規格；方向不清楚時先問清楚。
+- 已經決定好的事情，後續要落到完成的實作；不要只停在口頭說明或文件記錄。除非還有尚未決定的規格、事件或依賴會影響正確實作，才先暫停實作並給選項確認。
 - 遇到遊戲開發觀念或專有名詞時，用比喻說明。
 - 優先完成本地可跑的 MVP，再逐步解耦。

@@ -6,6 +6,10 @@ import {
   createProgressionTransaction,
   normalizeProgressionState
 } from "./progression-state.js";
+import {
+  formatSelectedPoseReferenceForImageModel,
+  selectPoseReference
+} from "../card-generation/pose-reference.js";
 
 export function buildEvolutionPromptProfile({ battleCard = {}, progression = null, branchOptions = [] } = {}) {
   const normalizedProgression = normalizeProgressionState(progression ?? battleCard.progression, {
@@ -31,9 +35,14 @@ export function buildEvolutionPromptProfile({ battleCard = {}, progression = nul
     ...(battleCard.skillKit?.battleTraits ?? []).map((skill) => skill.name),
     battleCard.skillKit?.ultimateSkill?.name
   ]);
+  const selectedPoseReference = selectEvolutionPoseReference({
+    battleCard,
+    normalizedProgression,
+    visual
+  });
 
   return {
-    profileVersion: "evolution-prompt-profile-v1",
+    profileVersion: "evolution-prompt-profile-v2",
     cardId: battleCard.id ?? normalizedProgression.cardId,
     characterName: battleCard.name ?? battleCard.characterSpec?.name ?? "",
     evolutionTier: visual.tier,
@@ -44,15 +53,18 @@ export function buildEvolutionPromptProfile({ battleCard = {}, progression = nul
     sourceRefs: battleCard.characterSpec?.sourceRefs ?? {},
     promptBase: battleCard.characterSpec?.visualPipeline?.prompt ?? "",
     promptProfile: battleCard.characterSpec?.promptProfile ?? {},
+    selectedPoseReference,
     characterFormBranch: battleCard.characterSpec?.characterFormBranch ?? "humanlike",
     visualLocks: [
       "preserve recognizable source-photo facial cues",
       "preserve character form branch",
       "keep plausible anatomy and stable proportions",
-      "keep original character identity hooks readable"
+      "keep original character identity hooks readable",
+      "preserve selected pose body profile safety rules"
     ],
     visualChanges: uniqueStrings([
       `evolution tier ${visual.tier}`,
+      selectedPoseReference?.upgradeCue,
       ...branchHooks,
       ...skillHooks.slice(0, 3)
     ]),
@@ -76,6 +88,7 @@ export function formatEvolutionPromptForImageModel(profile) {
     `LOCKS: ${profile.visualLocks.join("; ")}`,
     `VISUAL CHANGES: ${profile.visualChanges.join("; ")}`,
     `EXCLUDE: ${profile.avoid.join(", ")}`,
+    formatSelectedPoseReferenceForImageModel(profile.selectedPoseReference),
     profile.promptBase ? `BASE PROMPT CONTEXT: ${profile.promptBase}` : ""
   ]
     .filter(Boolean)
@@ -258,6 +271,69 @@ function updateEvolutionJob(progression, jobId, updater, visualPatch = {}) {
       evolutionArtJobs: nextJobs
     }
   };
+}
+
+function selectEvolutionPoseReference({ battleCard = {}, normalizedProgression = null, visual = null } = {}) {
+  const characterSpec = battleCard.characterSpec ?? {};
+  const baseGenerationProfile = characterSpec.generationProfile ?? {};
+  const contexts = characterSpec.contexts ?? {};
+  const photoSemantics = characterSpec.photoSemantics ?? {};
+  const basePose = characterSpec.promptProfile?.selectedPoseReference ?? {};
+  const evolutionTier = visual?.tier ?? normalizedProgression?.visualEvolution?.tier ?? baseGenerationProfile.evolutionTier ?? 0;
+  const analysis = {
+    hash: characterSpec.sourceRefs?.sourcePhotoHash ?? battleCard.id ?? "",
+    visibleSemanticTags: photoSemantics.visibleSemanticTags ?? contexts.vision?.visibleSemanticTags ?? [],
+    visibleSemanticTagGroups: photoSemantics.visibleSemanticTagGroups ?? contexts.vision?.visibleSemanticTagGroups ?? {},
+    metrics: contexts.vision?.photoMetrics ?? {}
+  };
+  const generationProfile = {
+    ...baseGenerationProfile,
+    characterName:
+      baseGenerationProfile.characterName ??
+      characterSpec.characterName ??
+      characterSpec.name ??
+      battleCard.name ??
+      "",
+    occupation:
+      baseGenerationProfile.occupation ??
+      contexts.questionnaire?.realWorldRole ??
+      basePose.poseIntent?.occupationText ??
+      "",
+    combatStyle:
+      baseGenerationProfile.combatStyle ??
+      contexts.questionnaire?.combatStyle ??
+      battleCard.combatVariant ??
+      "auto",
+    cardMood:
+      baseGenerationProfile.cardMood ??
+      contexts.questionnaire?.cardMood ??
+      baseGenerationProfile.timeMood ??
+      "cinematic",
+    signatureItem:
+      baseGenerationProfile.signatureItem ??
+      contexts.questionnaire?.signatureItem ??
+      "",
+    characterFormBranch:
+      baseGenerationProfile.characterFormBranch ??
+      characterSpec.characterFormBranch ??
+      contexts.questionnaire?.characterFormBranch ??
+      "humanlike",
+    poseBodyProfile: baseGenerationProfile.poseBodyProfile ?? basePose.bodyProfile,
+    bodyProfile: baseGenerationProfile.bodyProfile ?? basePose.bodyProfile,
+    evolutionTier,
+    progression: normalizedProgression
+  };
+
+  return selectPoseReference({
+    analysis,
+    generationProfile,
+    cardStats: battleCard.stats ?? {},
+    contexts: {
+      ...contexts,
+      progression: normalizedProgression,
+      visualEvolution: normalizedProgression?.visualEvolution
+    }
+  });
 }
 
 function uniqueStrings(values) {
